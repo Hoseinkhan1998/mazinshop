@@ -109,53 +109,48 @@ export const useProductStore = defineStore("product", {
       }
     },
 
+    // stores/products.ts -> actions
+
     async deleteProduct(productToDelete: Product) {
-      // کلاینت سوپابیس و تنظیمات را دریافت می‌کنیم
       const supabase = getSupabaseClient();
       const config = useRuntimeConfig();
 
       try {
-        // ۱. توکن دسترسی شخصی کاربر (JWT) را دریافت می‌کنیم
         const {
           data: { session },
         } = await supabase.auth.getSession();
         const token = session?.access_token;
+        if (!token) throw new Error("User is not authenticated.");
 
-        // اگر توکنی وجود نداشت (کاربر لاگین نبود)، عملیات را متوقف می‌کنیم
-        if (!token) {
-          throw new Error("User is not authenticated to delete products.");
-        }
+        // --- مرحله ۱: حذف تصاویر از Storage (نسخه آپدیت شده) ---
+        // چک می‌کنیم که آرایه تصاویر وجود دارد و خالی نیست
+        if (productToDelete.image_urls && productToDelete.image_urls.length > 0) {
+          // نام فایل را برای هر URL در آرایه استخراج می‌کنیم
+          const fileNames = productToDelete.image_urls.map((url) => new URL(url).pathname.split("/").pop()).filter(Boolean) as string[]; // filter(Boolean) برای حذف آیتم‌های null یا undefined
 
-        // ۲. ابتدا تصویر را از Storage حذف می‌کنیم
-        // نام فایل را از URL کامل استخراج می‌کنیم
-        const imageUrl = new URL(productToDelete.image_url);
-        const fileName = imageUrl.pathname.split("/").pop();
+          // اگر نام فایلی برای حذف وجود داشت، آنها را از Storage پاک می‌کنیم
+          if (fileNames.length > 0) {
+            const { error: storageError } = await supabase.storage.from("product-images").remove(fileNames);
 
-        if (fileName) {
-          const { error: storageError } = await supabase.storage.from("product-images").remove([fileName]);
-
-          if (storageError) {
-            // اگر در حذف عکس خطایی رخ داد، آن را در کنسول ثبت می‌کنیم ولی ادامه می‌دهیم
-            // چون حذف رکورد دیتابیس مهم‌تر است
-            console.error("Warning: Could not delete image from storage:", storageError.message);
+            if (storageError) {
+              console.error("Warning: Could not delete images from storage:", storageError.message);
+            }
           }
         }
 
-        // ۳. رکورد محصول را از دیتابیس حذف می‌کنیم
+        // --- مرحله ۲: حذف رکورد محصول از دیتابیس (بدون تغییر) ---
         const url = `${config.public.supabaseUrl}/rest/v1/products?id=eq.${productToDelete.id}`;
         await axios.delete(url, {
           headers: {
             apikey: config.public.supabaseKey,
-            // از توکن کاربر برای احراز هویت استفاده می‌کنیم
             Authorization: `Bearer ${token}`,
           },
         });
 
-        // ۴. لیست محصولات را در state بروزرسانی می‌کنیم تا UI بلافاصله تغییر کند
+        // --- مرحله ۳: آپدیت کردن state (بدون تغییر) ---
         this.products = this.products.filter((p) => p.id !== productToDelete.id);
       } catch (error) {
         console.error("Error deleting product:", error);
-        // ارور را دوباره پرتاب می‌کنیم تا در صورت نیاز در کامپوننت مدیریت شود
         throw error;
       }
     },
