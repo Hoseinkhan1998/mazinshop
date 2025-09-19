@@ -117,7 +117,7 @@ const removeImage = (index: number) => {
 };
 
 const handleSubmit = async () => {
-  // --- بخش جدید Validation ---
+  // --- بخش Validation (بدون تغییر) ---
   if (!form.value.title.trim()) {
     showToast("لطفاً عنوان محصول را وارد کنید.", "error");
     return;
@@ -127,7 +127,6 @@ const handleSubmit = async () => {
     showToast("لطفاً قیمت معتبری برای محصول وارد کنید.", "error");
     return;
   }
-
   if (previewUrls.value.length === 0) {
     showToast("انتخاب حداقل یک تصویر برای محصول الزامی است.", "error");
     return;
@@ -136,13 +135,31 @@ const handleSubmit = async () => {
 
   isSubmitting.value = true;
   try {
+    // ===== تغییر کلیدی اینجاست =====
+    // یک آبجکت تمیز از داده‌ها برای ارسال به store می‌سازیم
+    const dataToSend = {
+      title: form.value.title,
+      description: form.value.description,
+      type_id: form.value.type_id,
+      price: priceNumber, // از قیمت عددی و خالص‌شده استفاده می‌کنیم
+    };
+    // =============================
+
     if (isEditMode.value && props.productToEdit) {
       // حالت ویرایش
-      await productStore.updateProduct(props.productToEdit, form.value, newFiles.value, existingImageUrls.value);
+      await productStore.updateProduct(
+        props.productToEdit,
+        dataToSend, // آبجکت تمیز را ارسال می‌کنیم
+        newFiles.value,
+        existingImageUrls.value
+      );
       showToast("محصول با موفقیت ویرایش شد!", "success");
     } else {
       // حالت افزودن
-      await productStore.addProduct(form.value, newFiles.value);
+      await productStore.addProduct(
+        dataToSend, // آبجکت تمیز را ارسال می‌کنیم
+        newFiles.value
+      );
       showToast("محصول با موفقیت اضافه شد!", "success");
     }
     emit("submitted");
@@ -213,7 +230,7 @@ const handleSubmit = async () => {
             v-model="form.price"
             density="compact"
             rounded="lg"
-            type="text"            
+            type="text"
             hide-spin-buttons
             @input="handlePriceInput"
             label="قیمت محصول"
