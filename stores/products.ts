@@ -1,4 +1,3 @@
-// stores/products.ts
 import { defineStore } from "pinia";
 import type { Product, NewProduct } from "~/types/Product";
 import axios from "axios";
@@ -47,10 +46,8 @@ export const useProductStore = defineStore("product", {
       if (!token) throw new Error("User not authenticated.");
 
       try {
-        // ۱. آپلود تصاویر جدید و دریافت آرایه URLها
         const newImageUrls = await this.uploadMultipleImages(files);
 
-        // ۲. ساخت آبجکت نهایی محصول برای ارسال به دیتابیس
         const finalProduct: NewProduct = {
           ...newProductData,
           image_urls: newImageUrls,
@@ -59,7 +56,6 @@ export const useProductStore = defineStore("product", {
 
         const url = `${config.public.supabaseUrl}/rest/v1/products`;
 
-        // ۳. ارسال محصول نهایی به دیتابیس
         const response = await axios.post(url, finalProduct, {
           headers: {
             apikey: config.public.supabaseKey,
@@ -69,7 +65,6 @@ export const useProductStore = defineStore("product", {
           },
         });
 
-        // ۴. افزودن محصول جدید به state برای نمایش آنی در UI
         this.products.push(response.data[0]);
       } catch (error) {
         console.error("Error adding product:", error);
@@ -109,8 +104,6 @@ export const useProductStore = defineStore("product", {
       }
     },
 
-    // stores/products.ts -> actions
-
     async deleteProduct(productToDelete: Product) {
       const supabase = getSupabaseClient();
       const config = useRuntimeConfig();
@@ -122,13 +115,9 @@ export const useProductStore = defineStore("product", {
         const token = session?.access_token;
         if (!token) throw new Error("User is not authenticated.");
 
-        // --- مرحله ۱: حذف تصاویر از Storage (نسخه آپدیت شده) ---
-        // چک می‌کنیم که آرایه تصاویر وجود دارد و خالی نیست
         if (productToDelete.image_urls && productToDelete.image_urls.length > 0) {
-          // نام فایل را برای هر URL در آرایه استخراج می‌کنیم
           const fileNames = productToDelete.image_urls.map((url) => new URL(url).pathname.split("/").pop()).filter(Boolean) as string[]; // filter(Boolean) برای حذف آیتم‌های null یا undefined
 
-          // اگر نام فایلی برای حذف وجود داشت، آنها را از Storage پاک می‌کنیم
           if (fileNames.length > 0) {
             const { error: storageError } = await supabase.storage.from("product-images").remove(fileNames);
 
@@ -138,7 +127,6 @@ export const useProductStore = defineStore("product", {
           }
         }
 
-        // --- مرحله ۲: حذف رکورد محصول از دیتابیس (بدون تغییر) ---
         const url = `${config.public.supabaseUrl}/rest/v1/products?id=eq.${productToDelete.id}`;
         await axios.delete(url, {
           headers: {
@@ -147,7 +135,6 @@ export const useProductStore = defineStore("product", {
           },
         });
 
-        // --- مرحله ۳: آپدیت کردن state (بدون تغییر) ---
         this.products = this.products.filter((p) => p.id !== productToDelete.id);
       } catch (error) {
         console.error("Error deleting product:", error);
