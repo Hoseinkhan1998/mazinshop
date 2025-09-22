@@ -23,7 +23,7 @@ export const useToast = () => {
       setTimeout(() => {
         state.value = { show: false, message: "", type: "alert-info" };
       }, 500);
-    }, 3000);
+    }, 5000);
   };
 
   return {

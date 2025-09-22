@@ -1,3 +1,26 @@
+<script setup lang="ts">
+import { ref, computed } from "vue";
+import { useAuthStore } from "~/stores/auth";
+import AddProductForm from "~/components/AddProductForm.vue";
+import TypeManager from "~/components/TypeManager.vue";
+import { useToast } from "~/composables/useToast";
+
+const authStore = useAuthStore();
+
+const isLoggedIn = computed(() => authStore.isLoggedIn);
+const displayName = computed(() => authStore.displayName);
+const isAdmin = computed(() => authStore.isAdmin);
+const { toast, trigger } = useToast();
+
+// دو متغیر برای کنترل دو دیالوگ جداگانه
+const productDialog = ref(false);
+const typesDialog = ref(false);
+
+const props = defineProps<{
+  title: string;
+}>();
+</script>
+
 <template>
   <div class="relative h-full">
     <header class="backdrop-blur-2xl sticky top-0 z-30">
@@ -66,7 +89,9 @@
     </main>
     <Transition name="toast-slide">
       <div v-if="toast.show" class="toast toast-top toast-start z-[9999]">
-        <div class="py-2 text-white px-6 text-xl font-semibold" :class="['alert', toast.type]">
+        <div class="py-2 text-white px-6 max-w-[40vh] flex items-center gap-2 font-semibold" :class="['alert', toast.type]">
+          <v-icon v-if="toast.type === 'alert-error'" class=" !text-2xl">mdi-alert</v-icon>
+          <v-icon v-if="toast.type === 'alert-success'" class=" !text-2xl">mdi-check-circle</v-icon>
           <span>{{ toast.message }}</span>
         </div>
       </div>
@@ -102,28 +127,6 @@
   </div>
 </template>
 
-<script setup lang="ts">
-import { ref, computed } from "vue";
-import { useAuthStore } from "~/stores/auth";
-import AddProductForm from "~/components/AddProductForm.vue";
-import TypeManager from "~/components/TypeManager.vue";
-import { useToast } from "~/composables/useToast";
-
-const authStore = useAuthStore();
-
-const isLoggedIn = computed(() => authStore.isLoggedIn);
-const displayName = computed(() => authStore.displayName);
-const isAdmin = computed(() => authStore.isAdmin);
-const { toast, trigger } = useToast();
-
-// دو متغیر برای کنترل دو دیالوگ جداگانه
-const productDialog = ref(false);
-const typesDialog = ref(false);
-
-const props = defineProps<{
-  title: string;
-}>();
-</script>
 
 <style scoped>
 .hover-underline-animation {
