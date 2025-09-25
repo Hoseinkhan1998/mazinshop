@@ -1,44 +1,67 @@
 <script setup lang="ts">
-// import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useProductStore } from "~/stores/products";
-import { useAuthStore } from "~/stores/auth";
 import type { Product } from "~/types/Product";
 
 const productStore = useProductStore();
-const authStore = useAuthStore();
 const loading = ref(true);
 
-const isAdmin = computed(() => authStore.isAdmin);
-
 onMounted(async () => {
-  // اگر محصولات از قبل در store نبودند، آنها را واکشی کن
   if (productStore.products.length === 0) {
     await productStore.fetchProducts();
   }
   loading.value = false;
 });
 
-const formatPrice = (price: number) => {
-  return price.toLocaleString("fa-IR").replace(/٬/g, "،");
-};
-
-const quantities = ref<Record<number, number>>({});
-const addToCart = (productId: number) => {
-  quantities.value[productId] = 1;
-};
-const increment = (productId: number) => {
-  quantities.value[productId]++;
-};
-const decrement = (productId: number) => {
-  if (quantities.value[productId] > 1) {
-    quantities.value[productId]--;
-  } else {
-    delete quantities.value[productId];
-  }
-};
 const formatNumber = (num: number) => {
   return num.toLocaleString("fa-IR");
 };
+
+// تابع جدید برای محاسبه و نمایش بازه قیمتی
+const getPriceRange = (product: Product): string => {
+  if (!product.product_variants || product.product_variants.length === 0) {
+    return "ناموجود";
+  }
+  if (product.product_variants.length === 1) {
+    return `${formatNumber(product.product_variants[0].price)} تومان`;
+  }
+
+  const prices = product.product_variants.map((v) => v.price);
+  const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
+
+  if (minPrice === maxPrice) {
+    return `${formatNumber(minPrice)} تومان`;
+  }
+
+  return `از ${formatNumber(minPrice)} تا ${formatNumber(maxPrice)} تومان`;
+};
+
+// --- منطق موقت سبد خرید ---
+const quantities = ref<Record<number, number>>({});
+
+const getFirstVariantId = (product: Product): number => {
+  return product.product_variants?.[0]?.id || 0;
+};
+
+const addToCart = (variantId: number) => {
+  if (variantId > 0) {
+    quantities.value[variantId] = 1;
+  }
+};
+const increment = (variantId: number) => {
+  if (variantId > 0) {
+    quantities.value[variantId]++;
+  }
+};
+const decrement = (variantId: number) => {
+  if (quantities.value[variantId] > 1) {
+    quantities.value[variantId]--;
+  } else {
+    delete quantities.value[variantId];
+  }
+};
+// -----------------------------
 </script>
 
 <template>
@@ -54,27 +77,35 @@ const formatNumber = (num: number) => {
       <div class="col-span-9 grid grid-cols-12 gap-4">
         <h1 class="text-3xl font-bold mb-6 col-span-full">لیست محصولات</h1>
         <div v-for="product in productStore.products" :key="product.id" class="border col-span-4 rounded-lg shadow-lg flex flex-col">
-          <div class="h-[40vh] !p-3">
-            <img
+          <div class="h-[35vh]">
+            <v-carousel
               v-if="product.image_urls && product.image_urls.length > 0"
-              :src="product.image_urls[0]"
-              class="w-full h-full bg-center bg-cover object-cover rounded-lg"
-              alt="تصویر محصول" />
+              height="100%"
+              :show-arrows="product.image_urls.length > 1 ? 'hover' : false"
+              hide-delimiters
+              cycle
+              class="rounded-t-lg">
+              <v-carousel-item v-for="(imageUrl, i) in product.image_urls" :key="i" :src="imageUrl" cover></v-carousel-item>
+            </v-carousel>
             <div v-else class="w-full h-full bg-gray-200 flex items-center justify-center rounded-t-lg">
               <span class="text-gray-400">بدون تصویر</span>
             </div>
           </div>
-          <div class="!p-4 flex flex-col flex-grow relative">
-            <h2 class="text-xl font-semibold mb-2">{{ product.title }}</h2>
-            <p class="text-gray-600 mb-4 text-sm flex-grow">{{ product.description }}</p>
-            <div class="flex justify-between items-center">
-              <p class="text-lg font-bold text-green-600">{{ formatPrice(product.price) }} تومان</p>
+
+          <div class="!p-4 flex flex-col flex-grow">
+            <h2 class="text-xl font-semibold mb-2 truncate">{{ product.title }}</h2>
+            <div class="flex-grow"></div>
+            <div class="flex justify-between items-center mt-4">
+              <p class="text-lg font-bold text-green-600">{{ getPriceRange(product) }}</p>
+
               <div>
-                <button v-if="!quantities[product.id]" @click="addToCart(product.id)" class="px-3 h-7 mybg hov">افزودن به سبد</button>
+                <button v-if="!quantities[getFirstVariantId(product)]" @click="addToCart(getFirstVariantId(product))" class="px-3 h-8 mybg hov rounded-md text-white text-sm">
+                  افزودن به سبد
+                </button>
                 <div v-else class="flex items-center gap-2">
-                  <button @click.stop="decrement(product.id)" class="w-7 h-7 mybg hov">-</button>
-                  <span>{{ formatNumber(quantities[product.id]) }}</span>
-                  <button @click.stop="increment(product.id)" class="w-7 h-7 mybg hov">+</button>
+                  <button @click="decrement(getFirstVariantId(product))" class="w-8 h-8 mybg hov rounded-md text-white">-</button>
+                  <span class="font-semibold w-4 text-center">{{ formatNumber(quantities[getFirstVariantId(product)]) }}</span>
+                  <button @click="increment(getFirstVariantId(product))" class="w-8 h-8 mybg hov rounded-md text-white">+</button>
                 </div>
               </div>
             </div>

@@ -1,6 +1,6 @@
 // stores/types.ts
 import { defineStore } from "pinia";
-import { getSupabaseClient } from "~/utils/supabase";
+// import { getSupabaseClient } from "~/utils/supabase";
 import axios from "axios";
 
 export interface ProductType {
@@ -28,10 +28,10 @@ export const useTypesStore = defineStore("types", {
     },
     async addType(typename: string) {
       const config = useRuntimeConfig();
-      const supabase = getSupabaseClient();
+      const { $supabase } = useNuxtApp();
       const {
         data: { session },
-      } = await supabase.auth.getSession();
+      } = await $supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) throw new Error("User not authenticated.");
 
@@ -57,10 +57,10 @@ export const useTypesStore = defineStore("types", {
     },
     async updateType(id: number, typename: string) {
       const config = useRuntimeConfig();
-      const supabase = getSupabaseClient();
+      const { $supabase } = useNuxtApp();
       const {
         data: { session },
-      } = await supabase.auth.getSession();
+      } = await $supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) throw new Error("User not authenticated.");
 
@@ -90,10 +90,10 @@ export const useTypesStore = defineStore("types", {
     },
     async deleteType(typeId: number) {
       const config = useRuntimeConfig();
-      const supabase = getSupabaseClient();
+      const { $supabase } = useNuxtApp();
       const {
         data: { session },
-      } = await supabase.auth.getSession();
+      } = await $supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) throw new Error("User not authenticated.");
 

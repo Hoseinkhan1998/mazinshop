@@ -1,12 +1,12 @@
 <script setup lang="ts">
 // import { ref } from "vue";
 import { useAuthStore } from "~/stores/auth";
-import { getSupabaseClient } from "~/utils/supabase";
+// import { getSupabaseClient } from "~/utils/supabase";
 import { useToast } from "~/composables/useToast";
 
 const authStore = useAuthStore();
 const router = useRouter();
-const supabase = getSupabaseClient();
+const { $supabase } = useNuxtApp();
 
 const isRegisterMode = ref(false);
 const email = ref("");
@@ -30,7 +30,7 @@ const handleSubmit = async () => {
   try {
     if (isRegisterMode.value) {
       // حالت ثبت‌نام
-      const { data, error } = await supabase.auth.signUp({
+      const { data, error } = await $supabase.auth.signUp({
         email: email.value,
         password: password.value,
         options: {

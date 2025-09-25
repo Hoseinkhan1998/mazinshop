@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
-import type { Product, NewProduct } from "~/types/Product";
+import type { Product, NewProduct, ProductVariant } from "~/types/Product";
 import axios from "axios";
-import { getSupabaseClient } from "~/utils/supabase";
+// import { getSupabaseClient } from "~/utils/supabase";
 
 export const useProductStore = defineStore("product", {
   state: () => ({
@@ -9,40 +9,31 @@ export const useProductStore = defineStore("product", {
   }),
 
   actions: {
-    async fetchProducts(filters: string = "") {
+    // 1. واکشی تمام محصولات به همراه نسخه‌های مختلف آنها
+    async fetchProducts() {
       const config = useRuntimeConfig();
-      const supabaseUrl = config.public.supabaseUrl;
-      const supabaseKey = config.public.supabaseKey;
-
-      if (!supabaseUrl || !supabaseKey) return;
+      const url = `${config.public.supabaseUrl}/rest/v1/products?select=*,product_variants(*)`;
 
       try {
-        // اگر فیلتری ارسال شده بود، اون رو به انتهای URL اضافه می‌کنیم
-        const url = `${supabaseUrl}/rest/v1/products?select=*${filters ? `&${filters}` : ""}`;
-
-        console.log("Requesting URL:", url); // برای تست خوبه که ببینیم آدرس چی ساخته شده
-
         const response = await axios.get(url, {
           headers: {
-            apikey: supabaseKey,
-            Authorization: `Bearer ${supabaseKey}`,
+            apikey: config.public.supabaseKey,
+            Authorization: `Bearer ${config.public.supabaseKey}`,
           },
         });
-
         this.products = response.data;
       } catch (error) {
         console.error("Error fetching products:", error);
       }
     },
 
-    async addProduct(newProductData: Omit<NewProduct, "image_urls" | "id" | "created_at">, files: File[]) {
+    async addProduct(newProductData: Omit<NewProduct, "image_urls">, files: File[]) {
       const config = useRuntimeConfig();
-      const supabase = getSupabaseClient();
+      const { $supabase } = useNuxtApp();
       const {
         data: { session },
-      } = await supabase.auth.getSession();
+      } = await $supabase.auth.getSession();
       const token = session?.access_token;
-
       if (!token) throw new Error("User not authenticated.");
 
       try {
@@ -52,10 +43,8 @@ export const useProductStore = defineStore("product", {
           ...newProductData,
           image_urls: newImageUrls,
         };
-        console.log("Data being sent to Supabase:", finalProduct);
 
         const url = `${config.public.supabaseUrl}/rest/v1/products`;
-
         const response = await axios.post(url, finalProduct, {
           headers: {
             apikey: config.public.supabaseKey,
@@ -65,118 +54,40 @@ export const useProductStore = defineStore("product", {
           },
         });
 
-        this.products.push(response.data[0]);
+        // برای نمایش آنی، محصول جدید را به state اضافه می‌کنیم
+        // و یک آرایه خالی برای variants قرار میدهیم
+        const addedProduct = { ...response.data[0], product_variants: [] };
+        this.products.push(addedProduct);
+        return addedProduct; // محصول ساخته شده را برمیگردانیم تا در فرم استفاده شود
       } catch (error) {
         console.error("Error adding product:", error);
         throw error;
       }
     },
 
-    async uploadMultipleImages(files: File[]): Promise<string[]> {
-      const supabase = getSupabaseClient();
-      const uploadedUrls: string[] = [];
-
-      for (const file of files) {
-        const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-_]/g, "")}`;
-        const { error: uploadError } = await supabase.storage.from("product-images").upload(fileName, file);
-
-        if (uploadError) {
-          console.error("Error uploading one of the images:", uploadError);
-          throw uploadError;
-        }
-
-        const { data } = supabase.storage.from("product-images").getPublicUrl(fileName);
-
-        uploadedUrls.push(data.publicUrl);
-      }
-      return uploadedUrls;
-    },
-
-    async deleteImages(urls: string[]) {
-      if (urls.length === 0) return;
-      const supabase = getSupabaseClient();
-      const fileNames = urls.map((url) => url.split("/").pop() as string);
-
-      const { error } = await supabase.storage.from("product-images").remove(fileNames);
-
-      if (error) {
-        console.error("Error deleting images from storage:", error);
-      }
-    },
-
-    async deleteProduct(productToDelete: Product) {
-      const supabase = getSupabaseClient();
+    // 3. آپدیت کردن اطلاعات پایه و گالری تصاویر یک محصول
+    async updateProduct(productToUpdate: Product, newData: { title: string; description: string; type_id: number | null }, newFiles: File[], keptImageUrls: string[]) {
       const config = useRuntimeConfig();
-
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const token = session?.access_token;
-        if (!token) throw new Error("User is not authenticated.");
-
-        if (productToDelete.image_urls && productToDelete.image_urls.length > 0) {
-          const fileNames = productToDelete.image_urls.map((url) => new URL(url).pathname.split("/").pop()).filter(Boolean) as string[]; // filter(Boolean) برای حذف آیتم‌های null یا undefined
-
-          if (fileNames.length > 0) {
-            const { error: storageError } = await supabase.storage.from("product-images").remove(fileNames);
-
-            if (storageError) {
-              console.error("Warning: Could not delete images from storage:", storageError.message);
-            }
-          }
-        }
-
-        const url = `${config.public.supabaseUrl}/rest/v1/products?id=eq.${productToDelete.id}`;
-        await axios.delete(url, {
-          headers: {
-            apikey: config.public.supabaseKey,
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        this.products = this.products.filter((p) => p.id !== productToDelete.id);
-      } catch (error) {
-        console.error("Error deleting product:", error);
-        throw error;
-      }
-    },
-
-    async updateProduct(
-      productToUpdate: Product,
-      newData: { title: string; price: number; description: string; type_id: number | null },
-      newFiles: File[],
-      keptImageUrls: string[]
-    ) {
-      const config = useRuntimeConfig();
-      const supabase = getSupabaseClient();
+      const { $supabase } = useNuxtApp();
       const {
         data: { session },
-      } = await supabase.auth.getSession();
+      } = await $supabase.auth.getSession();
       const token = session?.access_token;
       if (!token) throw new Error("User not authenticated.");
 
       try {
-        // ۱. پیدا کردن تصاویری که توسط کاربر حذف شده‌اند
         const imagesToDelete = productToUpdate.image_urls.filter((url) => !keptImageUrls.includes(url));
-        // حذف تصاویر از Storage
         await this.deleteImages(imagesToDelete);
 
-        // ۲. آپلود تصاویر جدیدی که کاربر اضافه کرده
         const newImageUrls = await this.uploadMultipleImages(newFiles);
-
-        // ۳. ساخت آرایه نهایی URLهای تصاویر (ترکیب عکس‌های باقی‌مانده و جدید)
         const finalImageUrls = [...keptImageUrls, ...newImageUrls];
 
-        // ۴. ساخت آبجکت نهایی داده‌ها برای ارسال به دیتابیس
         const finalProductData = {
           ...newData,
           image_urls: finalImageUrls,
         };
 
         const url = `${config.public.supabaseUrl}/rest/v1/products?id=eq.${productToUpdate.id}`;
-
-        // ۵. ارسال درخواست آپدیت به دیتابیس
         const response = await axios.patch(url, finalProductData, {
           headers: {
             apikey: config.public.supabaseKey,
@@ -186,14 +97,177 @@ export const useProductStore = defineStore("product", {
           },
         });
 
-        // ۶. آپدیت کردن محصول در state برای نمایش آنی تغییرات در UI
-        const updatedItem = response.data[0];
+        const updatedItem = { ...response.data[0], product_variants: productToUpdate.product_variants };
         const index = this.products.findIndex((p) => p.id === updatedItem.id);
         if (index !== -1) {
           this.products[index] = updatedItem;
         }
       } catch (error) {
         console.error("Error updating product:", error);
+        throw error;
+      }
+    },
+
+    // 4. حذف کامل یک محصول (به همراه تمام variantها و تصاویر)
+    async deleteProduct(productToDelete: Product) {
+      const config = useRuntimeConfig();
+      const { $supabase } = useNuxtApp();
+      const {
+        data: { session },
+      } = await $supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("User not authenticated.");
+
+      try {
+        // ۱. حذف تمام تصاویر محصول از Storage
+        await this.deleteImages(productToDelete.image_urls);
+
+        // ۲. حذف محصول از جدول products
+        // نکته: شما باید در Supabase برای کلید خارجی product_id در جدول product_variants
+        // گزینه On delete را روی CASCADE تنظیم کنید تا با حذف محصول، تمام variantهای آن هم خودکار حذف شوند.
+        const url = `${config.public.supabaseUrl}/rest/v1/products?id=eq.${productToDelete.id}`;
+        await axios.delete(url, {
+          headers: {
+            apikey: config.public.supabaseKey,
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        // ۳. حذف محصول از state
+        this.products = this.products.filter((p) => p.id !== productToDelete.id);
+      } catch (error) {
+        console.error("Error deleting product:", error);
+        throw error;
+      }
+    },
+
+    // --- توابع کمکی برای تصاویر (این دو تابع بدون تغییر باقی می‌مانند) ---
+    async uploadMultipleImages(files: File[]): Promise<string[]> {
+      const { $supabase } = useNuxtApp();
+      const uploadedUrls: string[] = [];
+      for (const file of files) {
+        const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-_]/g, "")}`;
+        const { error } = await $supabase.storage.from("product-images").upload(fileName, file);
+        if (error) {
+          console.error("Error uploading one of the images:", error);
+          throw error;
+        }
+        const { data } = $supabase.storage.from("product-images").getPublicUrl(fileName);
+        uploadedUrls.push(data.publicUrl);
+      }
+      return uploadedUrls;
+    },
+
+    async deleteImages(urls: string[]) {
+      if (!urls || urls.length === 0) return;
+      const { $supabase } = useNuxtApp();
+      const fileNames = urls.map((url) => url.split("/").pop()).filter(Boolean) as string[];
+      if (fileNames.length > 0) {
+        const { error } = await $supabase.storage.from("product-images").remove(fileNames);
+        if (error) {
+          console.error("Error deleting images from storage:", error);
+        }
+      }
+    },
+
+    async addVariant(productId: number, newVariantData: NewVariant) {
+      const config = useRuntimeConfig();
+      const { $supabase } = useNuxtApp();
+      const {
+        data: { session },
+      } = await $supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("User not authenticated.");
+
+      const finalData = { ...newVariantData, product_id: productId };
+      const url = `${config.public.supabaseUrl}/rest/v1/product_variants`;
+
+      try {
+        const response = await axios.post(url, finalData, {
+          headers: {
+            apikey: config.public.supabaseKey,
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+            Prefer: "return=representation",
+          },
+        });
+
+        // آپدیت state به صورت آنی
+        const newVariant = response.data[0];
+        const productIndex = this.products.findIndex((p) => p.id === productId);
+        if (productIndex !== -1) {
+          this.products[productIndex].product_variants.push(newVariant);
+        }
+      } catch (error) {
+        console.error("Error adding variant:", error);
+        throw error;
+      }
+    },
+
+    // آپدیت کردن یک Variant موجود
+    async updateVariant(variantId: number, updatedVariantData: Partial<ProductVariant>) {
+      const config = useRuntimeConfig();
+      const { $supabase } = useNuxtApp();
+      const {
+        data: { session },
+      } = await $supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("User not authenticated.");
+
+      const url = `${config.public.supabaseUrl}/rest/v1/product_variants?id=eq.${variantId}`;
+
+      try {
+        const response = await axios.patch(url, updatedVariantData, {
+          headers: {
+            apikey: config.public.supabaseKey,
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+            Prefer: "return=representation",
+          },
+        });
+
+        // آپدیت state به صورت آنی
+        const updatedVariant = response.data[0];
+        const productIndex = this.products.findIndex((p) => p.id === updatedVariant.product_id);
+        if (productIndex !== -1) {
+          const variantIndex = this.products[productIndex].product_variants.findIndex((v) => v.id === variantId);
+          if (variantIndex !== -1) {
+            this.products[productIndex].product_variants[variantIndex] = updatedVariant;
+          }
+        }
+      } catch (error) {
+        console.error("Error updating variant:", error);
+        throw error;
+      }
+    },
+
+    // حذف کردن یک Variant
+    async deleteVariant(variantId: number, productId: number) {
+      const config = useRuntimeConfig();
+      const { $supabase } = useNuxtApp();
+      const {
+        data: { session },
+      } = await $supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("User not authenticated.");
+
+      const url = `${config.public.supabaseUrl}/rest/v1/product_variants?id=eq.${variantId}`;
+
+      try {
+        await axios.delete(url, {
+          headers: {
+            apikey: config.public.supabaseKey,
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        // آپدیت state به صورت آنی
+        const productIndex = this.products.findIndex((p) => p.id === productId);
+        if (productIndex !== -1) {
+          this.products[productIndex].product_variants = this.products[productIndex].product_variants.filter((v) => v.id !== variantId);
+        }
+      } catch (error) {
+        console.error("Error deleting variant:", error);
         throw error;
       }
     },
