@@ -77,15 +77,24 @@ const removeImage = (index: number) => {
   previewUrls.value.splice(index, 1);
 };
 
+// components/AddProductForm.vue -> <script setup>
+
 const handleSubmit = async () => {
-  if (!form.value.title.trim() || !form.value.type_id) {
-    showToast("لطفاً تمام فیلدهای الزامی را پر کنید.", "error");
+  // --- Validation ---
+  if (!form.value.title.trim()) {
+    showToast("لطفاً عنوان محصول را وارد کنید.", "error");
     return;
   }
-  if (!isEditMode.value && newFiles.value.length === 0) {
-    showToast("انتخاب حداقل یک تصویر برای محصول جدید الزامی است.", "error");
+  if (!form.value.type_id) {
+    showToast("انتخاب نوع محصول الزامی است.", "error");
     return;
   }
+  // تغییر اصلی اینجاست: چک می‌کنیم که آرایه پیش‌نمایش خالی نباشد
+  if (previewUrls.value.length === 0) {
+    showToast("انتخاب حداقل یک تصویر برای محصول الزامی است.", "error");
+    return;
+  }
+  // -----------------
 
   isSubmitting.value = true;
   try {
@@ -96,10 +105,8 @@ const handleSubmit = async () => {
     };
 
     if (isEditMode.value && props.productToEdit) {
-      await productStore.updateProduct(props.productToEdit, dataToSend, newFiles.value, existingImageUrls.value);
+      const updatedProduct = await productStore.updateProduct(props.productToEdit, dataToSend, newFiles.value, existingImageUrls.value);
       showToast("مشخصات اصلی محصول ویرایش شد!", "success");
-      // محصول آپدیت شده را از store میگیریم و به بیرون میفرستیم
-      const updatedProduct = productStore.products.find((p) => p.id === props.productToEdit?.id);
       emit("submitted", updatedProduct);
     } else {
       const newProduct = await productStore.addProduct(dataToSend, newFiles.value);

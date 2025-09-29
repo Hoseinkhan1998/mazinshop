@@ -46,8 +46,8 @@ const startEditing = (type: ProductType) => {
 
 const cancelEdit = () => {
   editingType.value = null;
-  typeName.value = '';
-  selectedAttributes.value = []; 
+  typeName.value = "";
+  selectedAttributes.value = [];
 };
 
 const checkTypeUsage = (typeId: number): boolean => {
@@ -137,8 +137,14 @@ const confirmEdit = async () => {
 };
 
 const openDeleteDialog = (type: ProductType) => {
-  typeToDelete.value = type;
-  deleteDialog.value = true;
+  const isUsed = checkTypeUsage(type.id);
+
+  if (isUsed) {
+    showToast("این نوع توسط حداقل یک محصول استفاده شده و قابل حذف نیست.", "error");
+  } else {
+    typeToDelete.value = type;
+    deleteDialog.value = true;
+  }
 };
 
 const confirmDelete = async () => {

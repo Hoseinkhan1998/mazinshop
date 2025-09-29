@@ -14,6 +14,98 @@ export const useAttributesStore = defineStore("attributes", {
     attributes: [] as Attribute[],
   }),
   actions: {
+    // این اکشن لیست مقادیر را برای یک زوج نوع-ویژگی به صورت کامل سینک می‌کند
+    async syncAttributeOptions(typeId: number, attributeId: number, newValues: string[]) {
+      const config = useRuntimeConfig();
+      const { $supabase } = useNuxtApp();
+      const {
+        data: { session },
+      } = await $supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("User not authenticated.");
+
+      try {
+        // ۱. حذف تمام مقادیر قدیمی مربوط به این زوج
+        const deleteUrl = `${config.public.supabaseUrl}/rest/v1/type_attribute_options?type_id=eq.${typeId}&attribute_id=eq.${attributeId}`;
+        await axios.delete(deleteUrl, {
+          headers: {
+            apikey: config.public.supabaseKey,
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        // ۲. افزودن لیست جدید مقادیر (اگر لیستی وجود داشت)
+        if (newValues.length > 0) {
+          const insertUrl = `${config.public.supabaseUrl}/rest/v1/type_attribute_options`;
+          const payload = newValues.map((value) => ({
+            type_id: typeId,
+            attribute_id: attributeId,
+            value,
+          }));
+          await axios.post(insertUrl, payload, {
+            headers: {
+              apikey: config.public.supabaseKey,
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          });
+        }
+      } catch (error) {
+        console.error("Error syncing attribute options:", error);
+        throw error;
+      }
+    },
+    // این اکشن جدید، مقادیر مربوط به یک ویژگی خاص را واکشی می‌کند
+    async fetchAttributeValues(attributeId: number): Promise<string[]> {
+      const config = useRuntimeConfig();
+      const url = `${config.public.supabaseUrl}/rest/v1/attribute_values?attribute_id=eq.${attributeId}&select=value`;
+      try {
+        const response = await axios.get(url, {
+          headers: { apikey: config.public.supabaseKey },
+        });
+        return response.data.map((item: { value: string }) => item.value);
+      } catch (error) {
+        console.error("Error fetching attribute values:", error);
+        return [];
+      }
+    },
+    // این اکشن قدرتمند، لیست مقادیر یک ویژگی را به صورت کامل سینک می‌کند
+    async syncAttributeValues(attributeId: number, newValues: string[]) {
+      const config = useRuntimeConfig();
+      const { $supabase } = useNuxtApp();
+      const {
+        data: { session },
+      } = await $supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("User not authenticated.");
+
+      try {
+        // ۱. حذف تمام مقادیر قدیمی مربوط به این ویژگی
+        const deleteUrl = `${config.public.supabaseUrl}/rest/v1/attribute_values?attribute_id=eq.${attributeId}`;
+        await axios.delete(deleteUrl, {
+          headers: {
+            apikey: config.public.supabaseKey,
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        // ۲. افزودن لیست جدید مقادیر (اگر لیستی وجود داشت)
+        if (newValues.length > 0) {
+          const insertUrl = `${config.public.supabaseUrl}/rest/v1/attribute_values`;
+          const payload = newValues.map((value) => ({ attribute_id: attributeId, value }));
+          await axios.post(insertUrl, payload, {
+            headers: {
+              apikey: config.public.supabaseKey,
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          });
+        }
+      } catch (error) {
+        console.error("Error syncing attribute values:", error);
+        throw error;
+      }
+    },
     // واکشی تمام ویژگی‌ها
     async fetchAttributes(force: boolean = false) {
       if (!force && this.attributes.length > 0) return;
