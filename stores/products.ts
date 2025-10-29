@@ -1,29 +1,62 @@
 import { defineStore } from "pinia";
-import type { Product, NewProduct, ProductVariant } from "~/types/Product";
+import type { Product, NewProduct, ProductVariant, NewVariant } from "~/types/Product";
 import axios from "axios";
 // import { getSupabaseClient } from "~/utils/supabase";
 
 export const useProductStore = defineStore("product", {
   state: () => ({
     products: [] as Product[],
+    currentProductDetails: null as any,
   }),
 
   actions: {
-    // 1. واکشی تمام محصولات به همراه نسخه‌های مختلف آنها
     async fetchProducts() {
       const config = useRuntimeConfig();
+      const { $supabase } = useNuxtApp(); // از پلاگین استفاده می‌کنیم
+
+      const {
+        data: { session },
+      } = await $supabase.auth.getSession();
+      const token = session?.access_token;
+
       const url = `${config.public.supabaseUrl}/rest/v1/products?select=*,product_variants(*)`;
 
       try {
         const response = await axios.get(url, {
           headers: {
             apikey: config.public.supabaseKey,
-            Authorization: `Bearer ${config.public.supabaseKey}`,
+            Authorization: `Bearer ${token || config.public.supabaseKey}`,
           },
         });
-        this.products = response.data;
+
+        const cleanData = response.data.map((product: any) => ({
+          ...product,
+          product_variants: Array.isArray(product.product_variants) ? product.product_variants : [],
+        }));
+        this.products = cleanData;
       } catch (error) {
         console.error("Error fetching products:", error);
+      }
+    },
+
+    async fetchProductDetails(productId: number) {
+      const { $supabase } = useNuxtApp();
+      this.currentProductDetails = null; // ریست کردن قبل از واکشی
+      try {
+        const { data, error } = await $supabase.rpc("get_product_details", {
+          p_id: productId,
+        });
+        if (error) throw error;
+        if (data) {
+          this.currentProductDetails = data;
+        } else {
+          // اگر محصولی با این ID پیدا نشد
+          console.warn(`Product with ID ${productId} not found.`);
+          // اینجا می‌توانید کاربر را به صفحه 404 هدایت کنید
+        }
+      } catch (error) {
+        console.error("Error fetching product details:", error);
+        // نمایش خطا به کاربر
       }
     },
 
@@ -38,8 +71,7 @@ export const useProductStore = defineStore("product", {
 
       try {
         const newImageUrls = await this.uploadMultipleImages(files);
-
-        const finalProduct: NewProduct = {
+        const finalProduct: Omit<Product, "id" | "created_at" | "product_variants"> = {
           ...newProductData,
           image_urls: newImageUrls,
         };
@@ -54,17 +86,14 @@ export const useProductStore = defineStore("product", {
           },
         });
 
-        // برای نمایش آنی، محصول جدید را به state اضافه می‌کنیم
-        // و یک آرایه خالی برای variants قرار میدهیم
         const addedProduct = { ...response.data[0], product_variants: [] };
         this.products.push(addedProduct);
-        return addedProduct; // محصول ساخته شده را برمیگردانیم تا در فرم استفاده شود
+        return addedProduct;
       } catch (error) {
         console.error("Error adding product:", error);
         throw error;
       }
     },
-
     // 3. آپدیت کردن اطلاعات پایه و گالری تصاویر یک محصول
     async updateProduct(productToUpdate: Product, newData: { title: string; description: string; type_id: number | null }, newFiles: File[], keptImageUrls: string[]) {
       const config = useRuntimeConfig();
@@ -82,10 +111,7 @@ export const useProductStore = defineStore("product", {
         const newImageUrls = await this.uploadMultipleImages(newFiles);
         const finalImageUrls = [...keptImageUrls, ...newImageUrls];
 
-        const finalProductData = {
-          ...newData,
-          image_urls: finalImageUrls,
-        };
+        const finalProductData = { ...newData, image_urls: finalImageUrls };
 
         const url = `${config.public.supabaseUrl}/rest/v1/products?id=eq.${productToUpdate.id}`;
         const response = await axios.patch(url, finalProductData, {
@@ -97,10 +123,15 @@ export const useProductStore = defineStore("product", {
           },
         });
 
-        const updatedItem = { ...response.data[0], product_variants: productToUpdate.product_variants };
-        const index = this.products.findIndex((p) => p.id === updatedItem.id);
-        if (index !== -1) {
-          this.products[index] = updatedItem;
+        const updatedProductFromServer = response.data[0];
+        const productIndex = this.products.findIndex((p) => p.id === productToUpdate.id);
+        if (productIndex !== -1) {
+          const updatedProduct = {
+            ...this.products[productIndex], // نگه‌داشتن variant های فعلی
+            ...updatedProductFromServer, // آپدیت کردن اطلاعات پایه
+          };
+          this.products[productIndex] = updatedProduct;
+          return updatedProduct; // <-- این خط return اضافه شده است
         }
       } catch (error) {
         console.error("Error updating product:", error);
@@ -181,7 +212,7 @@ export const useProductStore = defineStore("product", {
 
       const finalData = { ...newVariantData, product_id: productId };
       const url = `${config.public.supabaseUrl}/rest/v1/product_variants`;
-
+      // console.log("DEBUG: Data being sent to addVariant:", JSON.stringify(finalData, null, 2));
       try {
         const response = await axios.post(url, finalData, {
           headers: {
@@ -192,18 +223,21 @@ export const useProductStore = defineStore("product", {
           },
         });
 
-        // آپدیت state به صورت آنی
         const newVariant = response.data[0];
         const productIndex = this.products.findIndex((p) => p.id === productId);
         if (productIndex !== -1) {
-          this.products[productIndex].product_variants.push(newVariant);
+          const product = this.products[productIndex];
+          const updatedProduct = {
+            ...product,
+            product_variants: [...product.product_variants, newVariant],
+          };
+          this.products[productIndex] = updatedProduct;
         }
       } catch (error) {
         console.error("Error adding variant:", error);
         throw error;
       }
     },
-
     // آپدیت کردن یک Variant موجود
     async updateVariant(variantId: number, updatedVariantData: Partial<ProductVariant>) {
       const config = useRuntimeConfig();
@@ -226,21 +260,22 @@ export const useProductStore = defineStore("product", {
           },
         });
 
-        // آپدیت state به صورت آنی
+        // --- تغییر اصلی برای تضمین Reactivity ---
         const updatedVariant = response.data[0];
         const productIndex = this.products.findIndex((p) => p.id === updatedVariant.product_id);
         if (productIndex !== -1) {
-          const variantIndex = this.products[productIndex].product_variants.findIndex((v) => v.id === variantId);
-          if (variantIndex !== -1) {
-            this.products[productIndex].product_variants[variantIndex] = updatedVariant;
-          }
+          const product = this.products[productIndex];
+          const updatedProduct = {
+            ...product,
+            product_variants: product.product_variants.map((v) => (v.id === variantId ? updatedVariant : v)),
+          };
+          this.products[productIndex] = updatedProduct;
         }
       } catch (error) {
         console.error("Error updating variant:", error);
         throw error;
       }
     },
-
     // حذف کردن یک Variant
     async deleteVariant(variantId: number, productId: number) {
       const config = useRuntimeConfig();
@@ -261,10 +296,15 @@ export const useProductStore = defineStore("product", {
           },
         });
 
-        // آپدیت state به صورت آنی
+        // --- تغییر اصلی برای تضمین Reactivity ---
         const productIndex = this.products.findIndex((p) => p.id === productId);
         if (productIndex !== -1) {
-          this.products[productIndex].product_variants = this.products[productIndex].product_variants.filter((v) => v.id !== variantId);
+          const product = this.products[productIndex];
+          const updatedProduct = {
+            ...product,
+            product_variants: product.product_variants.filter((v) => v.id !== variantId),
+          };
+          this.products[productIndex] = updatedProduct;
         }
       } catch (error) {
         console.error("Error deleting variant:", error);

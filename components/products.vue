@@ -19,9 +19,10 @@ const formatNumber = (num: number) => {
 
 // تابع جدید برای محاسبه و نمایش بازه قیمتی
 const getPriceRange = (product: Product): string => {
-  if (!product.product_variants || product.product_variants.length === 0) {
+  if (!Array.isArray(product.product_variants) || product.product_variants.length === 0) {
     return "ناموجود";
   }
+
   if (product.product_variants.length === 1) {
     return `${formatNumber(product.product_variants[0].price)} تومان`;
   }
@@ -36,32 +37,6 @@ const getPriceRange = (product: Product): string => {
 
   return `از ${formatNumber(minPrice)} تا ${formatNumber(maxPrice)} تومان`;
 };
-
-// --- منطق موقت سبد خرید ---
-const quantities = ref<Record<number, number>>({});
-
-const getFirstVariantId = (product: Product): number => {
-  return product.product_variants?.[0]?.id || 0;
-};
-
-const addToCart = (variantId: number) => {
-  if (variantId > 0) {
-    quantities.value[variantId] = 1;
-  }
-};
-const increment = (variantId: number) => {
-  if (variantId > 0) {
-    quantities.value[variantId]++;
-  }
-};
-const decrement = (variantId: number) => {
-  if (quantities.value[variantId] > 1) {
-    quantities.value[variantId]--;
-  } else {
-    delete quantities.value[variantId];
-  }
-};
-// -----------------------------
 </script>
 
 <template>
@@ -76,7 +51,11 @@ const decrement = (variantId: number) => {
       </div>
       <div class="col-span-9 grid grid-cols-12 gap-4">
         <h1 class="text-3xl font-bold mb-6 col-span-full">لیست محصولات</h1>
-        <div v-for="product in productStore.products" :key="product.id" class="border col-span-4 rounded-lg shadow-lg flex flex-col">
+        <NuxtLink
+          v-for="product in productStore.products"
+          :key="product.id"
+          :to="`/products/${product.id}`"
+          class="border col-span-4 rounded-lg shadow-lg flex flex-col no-underline text-current hover:shadow-xl transition-shadow duration-200">
           <div class="h-[35vh]">
             <v-carousel
               v-if="product.image_urls && product.image_urls.length > 0"
@@ -97,20 +76,9 @@ const decrement = (variantId: number) => {
             <div class="flex-grow"></div>
             <div class="flex justify-between items-center mt-4">
               <p class="text-lg font-bold text-green-600">{{ getPriceRange(product) }}</p>
-
-              <div>
-                <button v-if="!quantities[getFirstVariantId(product)]" @click="addToCart(getFirstVariantId(product))" class="px-3 h-8 mybg hov rounded-md text-white text-sm">
-                  افزودن به سبد
-                </button>
-                <div v-else class="flex items-center gap-2">
-                  <button @click="decrement(getFirstVariantId(product))" class="w-8 h-8 mybg hov rounded-md text-white">-</button>
-                  <span class="font-semibold w-4 text-center">{{ formatNumber(quantities[getFirstVariantId(product)]) }}</span>
-                  <button @click="increment(getFirstVariantId(product))" class="w-8 h-8 mybg hov rounded-md text-white">+</button>
-                </div>
-              </div>
             </div>
           </div>
-        </div>
+        </NuxtLink>
       </div>
     </div>
   </div>

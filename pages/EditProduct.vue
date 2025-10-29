@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed } from "vue";
 import { useProductStore } from "~/stores/products";
 import type { Product } from "~/types/Product";
 import AddProductForm from "~/components/AddProductForm.vue";
@@ -18,34 +18,37 @@ const editDialog = ref(false);
 const deleteDialog = ref(false);
 const deleteLoading = ref(false);
 const tab = ref<"details" | "variants">("details");
-const editingProduct = ref<Product | null>(null);
+
+const editingProductId = ref<number | null>(null);
+
+const editingProduct = computed(() => {
+  if (!editingProductId.value) return null;
+  return productStore.products.find((p) => p.id === editingProductId.value);
+});
+
 const productToDelete = ref<Product | null>(null);
 
 onMounted(async () => {
-  if (productStore.products.length === 0) {
-    await productStore.fetchProducts();
-  }
+  await productStore.fetchProducts();
   loading.value = false;
 });
 
+// حالا این تابع فقط شناسه را تنظیم می‌کند
 const openEditDialog = (product: Product) => {
-  editingProduct.value = product;
+  editingProductId.value = product.id;
   editDialog.value = true;
 };
 
 const closeEditDialog = () => {
   editDialog.value = false;
   setTimeout(() => {
-    editingProduct.value = null;
+    editingProductId.value = null;
     tab.value = "details";
   }, 300);
 };
 
+// این تابع دیگر نیازی به آپدیت دستی editingProduct ندارد چون computed است
 const handleProductUpdate = (updatedProduct: Product) => {
-  // بعد از آپدیت مشخصات اصلی، محصول در حال ویرایش را آپدیت می‌کنیم
-  // تا VariantManager هم اطلاعات جدید را دریافت کند
-  editingProduct.value = updatedProduct;
-  // کاربر را به تب بعدی هدایت می‌کنیم
   tab.value = "variants";
 };
 
@@ -118,7 +121,7 @@ const confirmDelete = async () => {
               <AddProductForm v-if="editingProduct" :product-to-edit="editingProduct" @submitted="handleProductUpdate" @cancel="closeEditDialog" />
             </v-window-item>
             <v-window-item value="variants">
-              <VariantManager v-if="editingProduct" :product="editingProduct" />
+              <VariantManager v-if="editingProduct" :product-id="editingProduct.id" />
             </v-window-item>
           </v-window>
 

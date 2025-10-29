@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import { useAuthStore } from "~/stores/auth";
-import type { Product } from "~/types/Product";
+import type { Product } from "~/types/Product"; // Product را import کنید
 import AddProductForm from "~/components/AddProductForm.vue";
 import TypeManager from "~/components/TypeManager.vue";
 import AttributeManager from "~/components/AttributeManager.vue";
@@ -15,27 +15,29 @@ const isLoggedIn = computed(() => authStore.isLoggedIn);
 const displayName = computed(() => authStore.displayName);
 const isAdmin = computed(() => authStore.isAdmin);
 
-// --- State برای دیالوگ‌ها و جریان کاری جدید ---
+// --- State برای دیالوگ‌ها ---
 const productDialog = ref(false);
 const typesDialog = ref(false);
 const attributesDialog = ref(false);
 const tab = ref<"details" | "variants">("details"); // کنترل تب فعال
 
-// دو متغیر برای مدیریت حالت افزودن یا ویرایش
-const activeProduct = ref<Product | null>(null); // محصولی که در حال کار روی آن هستیم
-const productToEdit = ref<Product | null>(null); // محصولی که برای ویرایش اولیه پاس داده می‌شود
+// --- State برای مدیریت جریان کاری افزودن/ویرایش محصول ---
+// این متغیر، محصولی که در حال کار روی آن هستیم (چه جدید چه ویرایشی) را نگه می‌دارد
+const productForVariantManagement = ref<Product | null>(null);
+// این متغیر فقط برای پاس دادن اولیه به AddProductForm در حالت ویرایش است
+const productToEdit = ref<Product | null>(null);
 
-// تابع برای باز کردن دیالوگ (چه برای افزودن و چه ویرایش)
 const openProductDialog = (product: Product | null = null) => {
   if (product) {
-    // حالت ویرایش
-    productToEdit.value = product;
-    activeProduct.value = product;
-    tab.value = "details"; // همیشه از تب اول شروع کن
+    // حالت ویرایش از صفحه EditProduct (این تابع دیگر اینجا استفاده نمی‌شود)
+    // این منطق باید در EditProduct.vue باشد
+    // productToEdit.value = product; // <-- این خط را حذف یا کامنت کنید
+    // productForVariantManagement.value = product; // <-- این خط را حذف یا کامنت کنید
+    // tab.value = 'details';
   } else {
-    // حالت افزودن
-    productToEdit.value = null;
-    activeProduct.value = null;
+    // حالت افزودن از دکمه شناور در Layout
+    productToEdit.value = null; // هیچ محصولی برای ویرایش اولیه نیست
+    productForVariantManagement.value = null; // هنوز محصولی ساخته نشده
     tab.value = "details";
   }
   productDialog.value = true;
@@ -43,7 +45,8 @@ const openProductDialog = (product: Product | null = null) => {
 
 // این تابع بعد از ثبت/ویرایش محصول پایه در تب اول اجرا می‌شود
 const handleProductSubmitted = (product: Product) => {
-  activeProduct.value = product; // محصول فعال را آپدیت می‌کنیم
+  // محصول ساخته یا ویرایش شده را در state اصلی قرار می‌دهیم
+  productForVariantManagement.value = product;
   tab.value = "variants"; // به صورت خودکار به تب دوم می‌رویم
 };
 
@@ -52,13 +55,10 @@ const closeProductDialog = () => {
   productDialog.value = false;
   setTimeout(() => {
     productToEdit.value = null;
-    activeProduct.value = null;
+    productForVariantManagement.value = null; // ریست کردن برای دفعه بعد
     tab.value = "details";
-  }, 300); // با تاخیر ریست میکنیم تا ظاهر دیالوگ به هم نریزد
+  }, 300);
 };
-
-// برای تست، می‌توانید این تابع را به دکمه‌ای در صفحه manage-products متصل کنید
-// openProductDialog(product);
 </script>
 
 <template>
@@ -163,9 +163,9 @@ const closeProductDialog = () => {
 
         <v-dialog v-model="productDialog" max-width="700px" persistent>
           <v-card class="!p-0 !rounded-xl">
-            <v-tabs v-model="tab" bg-color="primary">
+            <v-tabs v-model="tab" bg-color="primary" grow>
               <v-tab value="details">۱. مشخصات اصلی</v-tab>
-              <v-tab value="variants" :disabled="!activeProduct">۲. نسخه‌ها و قیمت</v-tab>
+              <v-tab value="variants" :disabled="!productForVariantManagement">۲. نسخه‌ها و قیمت</v-tab>
             </v-tabs>
 
             <v-card-text>
@@ -175,15 +175,16 @@ const closeProductDialog = () => {
                 </v-window-item>
 
                 <v-window-item value="variants">
-                  <VariantManager v-if="activeProduct" :product="activeProduct" />
+                  <VariantManager v-if="productForVariantManagement" :product-id="productForVariantManagement.id" />
+                  <div v-else class="text-center pa-4 text-grey">ابتدا مشخصات اصلی محصول را در تب قبل ذخیره کنید.</div>
                 </v-window-item>
               </v-window>
             </v-card-text>
 
-            <v-card-actions>
+            <v-card-actions class="bg-grey-lighten-4">
               <v-spacer></v-spacer>
               <v-btn color="blue-darken-1" variant="text" @click="closeProductDialog">
-                {{ activeProduct ? "پایان و بستن" : "انصراف" }}
+                {{ productForVariantManagement ? "پایان و بستن" : "انصراف" }}
               </v-btn>
             </v-card-actions>
           </v-card>

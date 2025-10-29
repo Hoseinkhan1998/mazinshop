@@ -160,6 +160,9 @@ const handleSubmit = async () => {
           variant="outlined"
           :rules="[(v) => !!v || 'انتخاب نوع الزامی است']"
           required
+          :disabled="isEditMode && productToEdit && productToEdit.product_variants.length > 0"
+          hint="برای تغییر نوع، ابتدا باید تمام نسخه‌های محصول را حذف کنید."
+          :persistent-hint="isEditMode && productToEdit && productToEdit.product_variants.length > 0"
           class="mb-4"></v-select>
 
         <v-text-field

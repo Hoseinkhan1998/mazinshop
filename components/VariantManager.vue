@@ -1,22 +1,34 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, watch } from "vue"; // Make sure watch is imported
 import { useProductStore } from "~/stores/products";
-import { useTypesStore } from "~/stores/types";
-import type { Product, ProductVariant } from "~/types/Product";
+import { useTypesStore } from "~/stores/types"; // Import typesStore
+import type { Product, ProductVariant, NewVariant } from "~/types/Product";
 import { useToast } from "~/composables/useToast";
 
-const props = defineProps<{ product: Product }>();
+// Accept productId instead of the whole product object
+const props = defineProps<{ productId: number }>();
 
 const productStore = useProductStore();
-const typesStore = useTypesStore();
+const typesStore = useTypesStore(); // Instantiate typesStore
 const { trigger: showToast } = useToast();
 
 const isSubmitting = ref(false);
 const editingVariant = ref<ProductVariant | null>(null);
 const isEditMode = computed(() => !!editingVariant.value);
-
-// State جدید برای نگهداری آپشن‌های واکشی شده
 const optionsForAttributes = ref<Record<number, string[]>>({});
+
+// --- Key Change: Use computed to get the reactive product from the store ---
+const product = computed(() => {
+  return productStore.products.find((p) => p.id === props.productId);
+});
+// ------------------------------------------------------------------------
+
+// Computed property for relevant attributes based on the reactive product
+const relevantAttributes = computed(() => {
+  if (!product.value) return [];
+  const productType = typesStore.types.find((t) => t.id === product.value?.type_id);
+  return productType?.attributes || [];
+});
 
 const initialFormState = () => ({
   price: 0,
@@ -26,16 +38,28 @@ const initialFormState = () => ({
 
 const variantForm = ref(initialFormState());
 
-// کامپیوپتد پراپرتی برای گرفتن ویژگی‌های مربوط به "نوع" این محصول
-const relevantAttributes = computed(() => {
-  const productType = typesStore.types.find((t) => t.id === props.product.type_id);
-  return productType?.attributes || [];
+onMounted(async () => {
+  // Fetch options only if a valid product exists
+  if (product.value) {
+    optionsForAttributes.value = await typesStore.fetchOptionsForType(product.value.type_id);
+  }
 });
 
-onMounted(async () => {
-  // آپشن‌های مربوط به نوع این محصول را واکشی می‌کنیم
-  optionsForAttributes.value = await typesStore.fetchOptionsForType(props.product.type_id);
-});
+// Watch for changes in relevantAttributes to pre-fill form keys if needed
+watch(
+  relevantAttributes,
+  (newAttrs) => {
+    if (!isEditMode.value) {
+      // Only adjust form for new variants
+      const newAttributeKeys: Record<string, string> = {};
+      newAttrs.forEach((attr) => {
+        newAttributeKeys[attr.name] = ""; // Initialize with empty string
+      });
+      variantForm.value.attributes = newAttributeKeys;
+    }
+  },
+  { immediate: true }
+);
 
 const formatAttributes = (attrs: Record<string, string>): string => {
   return Object.entries(attrs)
@@ -54,14 +78,19 @@ const startEditing = (variant: ProductVariant) => {
 
 const cancelEdit = () => {
   editingVariant.value = null;
-  variantForm.value = initialFormState();
+  // Re-initialize attribute keys based on relevant attributes
+  const newAttributeKeys: Record<string, string> = {};
+  relevantAttributes.value.forEach((attr) => {
+    newAttributeKeys[attr.name] = "";
+  });
+  variantForm.value = { ...initialFormState(), attributes: newAttributeKeys };
 };
 
 const handleDelete = async (variant: ProductVariant) => {
-  if (confirm(`آیا از حذف این نسخه مطمئن هستید؟`)) {
+  if (confirm(`آیا از حذف این نسخه مطمئن هستید؟`) && product.value) {
     isSubmitting.value = true;
     try {
-      await productStore.deleteVariant(variant.id, props.product.id);
+      await productStore.deleteVariant(variant.id, product.value.id); // Use product.value.id
       showToast("نسخه با موفقیت حذف شد.", "success");
     } catch (error) {
       showToast("خطا در حذف نسخه.", "error");
@@ -72,31 +101,41 @@ const handleDelete = async (variant: ProductVariant) => {
 };
 
 const handleSubmit = async () => {
-  // چک کردن اینکه آیا نسخه‌ای با همین ویژگی‌ها از قبل وجود دارد یا نه
-  const newVariantAttrsString = JSON.stringify(variantForm.value.attributes);
-  const isDuplicate = props.product.product_variants.some((variant) => {
-    // در حالت ویرایش، خود آیتم فعلی را در نظر نمی‌گیریم
+  if (!product.value) return; // Ensure product exists
+
+  const sortedAttributes = Object.fromEntries(Object.entries(variantForm.value.attributes).sort());
+  const newVariantAttrsString = JSON.stringify(sortedAttributes);
+
+  const existingVariants = product.value.product_variants || []; // Ensure it's an array
+
+  const isDuplicate = existingVariants.some((variant) => {
     if (isEditMode.value && variant.id === editingVariant.value?.id) return false;
-    return JSON.stringify(variant.attributes) === newVariantAttrsString;
+    const existingSortedAttributes = Object.fromEntries(Object.entries(variant.attributes).sort());
+    return JSON.stringify(existingSortedAttributes) === newVariantAttrsString;
   });
 
   if (isDuplicate) {
-    showToast("نسخه‌ای با این ویژگی‌ها از قبل برای این محصول وجود دارد.", "error");
+    showToast("نسخه‌ای با این ویژگی‌های دقیق از قبل برای این محصول وجود دارد.", "error");
     return;
   }
 
   isSubmitting.value = true;
   try {
+    const dataToSend = {
+      ...variantForm.value,
+      attributes: sortedAttributes,
+    };
     if (isEditMode.value && editingVariant.value) {
-      await productStore.updateVariant(editingVariant.value.id, variantForm.value);
+      await productStore.updateVariant(editingVariant.value.id, dataToSend);
       showToast("نسخه با موفقیت ویرایش شد.", "success");
     } else {
-      await productStore.addVariant(props.product.id, variantForm.value);
+      await productStore.addVariant(product.value.id, dataToSend); // Use product.value.id
       showToast("نسخه جدید با موفقیت اضافه شد.", "success");
     }
     cancelEdit();
   } catch (error) {
     showToast("عملیات با خطا مواجه شد.", "error");
+    console.error(error);
   } finally {
     isSubmitting.value = false;
   }
@@ -104,7 +143,7 @@ const handleSubmit = async () => {
 </script>
 
 <template>
-  <div class="!p-3 !overflow-y-hidden">
+  <div class="!p-3 !overflow-y-hidden" v-if="product">
     <div class="!p-3 !rounded-xl border-2 border-primarymain border-dashed max-h-[90vh] overflow-y-auto">
       <h3 class="text-xl font-semibold mb-4 text-center">مدیریت نسخه‌ها برای: {{ product.title }}</h3>
 
@@ -165,4 +204,5 @@ const handleSubmit = async () => {
       </form>
     </div>
   </div>
+  <div v-else class="p-4 text-center text-gray-500">در حال بارگذاری اطلاعات محصول...</div>
 </template>

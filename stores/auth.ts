@@ -33,6 +33,8 @@ export const useAuthStore = defineStore("auth", {
       if (error) throw error;
       if (data.user) {
         await this.fetchUser();
+        const cartStore = useCartStore();
+        await cartStore.syncOnLogin();
       }
     },
 
@@ -75,6 +77,8 @@ export const useAuthStore = defineStore("auth", {
     },
     
     async signOut() {
+      const cartStore = useCartStore();
+      cartStore.clearOnLogout();
       const { $supabase } = useNuxtApp();
       await $supabase.auth.signOut();
       this.user = null;
