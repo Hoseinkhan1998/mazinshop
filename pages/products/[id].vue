@@ -47,6 +47,17 @@ async function fetchDetails() {
 
   try {
     await productStore.fetchProductDetails(productId.value);
+    const p = product.value;
+    if (p && Array.isArray(p.variants) && p.variants.length > 0) {
+      const existingForThisProduct = cartStore.items.find((i) => i.productId === p.id);
+      if (existingForThisProduct) {
+        const match = p.variants.find((v) => v.id === existingForThisProduct.variantId);
+        if (match) {
+          selectedOptions.value = { ...match.attributes };
+          quantity.value = existingForThisProduct.quantity;
+        }
+      }
+    }
     if (!productStore.currentProductDetails?.product) {
       errorMessage.value = "محصول مورد نظر یافت نشد.";
     } else {
@@ -141,7 +152,6 @@ const getAvailableOptionsForAttribute = (attributeName: string): string[] => {
   return Array.from(set);
 };
 
-
 // وریِنت انتخاب‌شده بر اساس selectedOptions + fixed attributes
 const selectedVariant = computed<ProductVariant | null>(() => {
   if (!product.value || !product.value.variants) return null;
@@ -213,7 +223,13 @@ const handleOptionChange = (changedAttributeName: string) => {
     }
   }
 
-  quantity.value = 1;
+  const v = selectedVariant.value;
+  if (v) {
+    const existing = cartStore.items.find((i) => i.variantId === v.id);
+    quantity.value = existing ? existing.quantity : 1;
+  } else {
+    quantity.value = 1;
+  }
   addedToCart.value = false;
 };
 
@@ -238,10 +254,13 @@ const decrement = () => {
 };
 
 // هر تغییری در productId یا تصویر اصلی هم CTA را برمی‌گرداند (سخت‌گیرانه طبق درخواستت)
-watch([productId, selectedImageIndex, selectedOptions], () => {
-  addedToCart.value = false;
-}, { deep: true });
-
+watch(
+  [productId, selectedImageIndex, selectedOptions],
+  () => {
+    addedToCart.value = false;
+  },
+  { deep: true }
+);
 
 // همچنین اگر selectedOptions تغییر کند (برای هر دلیل دیگری)
 watch(
@@ -252,24 +271,31 @@ watch(
   },
   { deep: true }
 );
+watch(
+  () => selectedVariant.value,
+  (v) => {
+    if (!v) return;
+    const existing = cartStore.items.find((i) => i.variantId === v.id);
+    quantity.value = existing ? existing.quantity : 1;
+    addedToCart.value = false; // کاربر دوباره روی CTA تصمیم بگیرد
+  }
+);
 
 // ---------- CTA behavior ----------
-const handleAddToCart = () => {
+const handleAddToCart = async () => {
   if (!addedToCart.value) {
-    // حالت «افزودن به سبد خرید»
     if (product.value && selectedVariant.value) {
       try {
-        cartStore.addItem(product.value, selectedVariant.value, quantity.value);
+        await cartStore.addItem(product.value, selectedVariant.value, quantity.value); // ← await
         showToast("محصول به سبد خرید اضافه شد!", "success");
-        addedToCart.value = true; // اکنون CTA به «مشاهده سبد خرید» تغییر می‌کند
+        addedToCart.value = true;
       } catch (error: any) {
-        showToast(error.message, "error");
+        showToast(error?.message || "خطا در افزودن به سبد خرید", "error");
       }
     } else {
       showToast("لطفاً تمام گزینه‌های محصول را انتخاب کنید.", "error");
     }
   } else {
-    // حالت «مشاهده سبد خرید»
     router.push("/shoppingcard");
   }
 };

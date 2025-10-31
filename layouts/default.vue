@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { useAuthStore } from "~/stores/auth";
 import type { Product } from "~/types/Product"; // Product را import کنید
 import AddProductForm from "~/components/AddProductForm.vue";
@@ -7,6 +7,7 @@ import TypeManager from "~/components/TypeManager.vue";
 import AttributeManager from "~/components/AttributeManager.vue";
 import VariantManager from "~/components/VariantManager.vue";
 import { useToast } from "~/composables/useToast";
+import { useCartStore } from "~/stores/cart";
 
 const authStore = useAuthStore();
 const { toast } = useToast();
@@ -21,21 +22,19 @@ const typesDialog = ref(false);
 const attributesDialog = ref(false);
 const tab = ref<"details" | "variants">("details"); // کنترل تب فعال
 
-// --- State برای مدیریت جریان کاری افزودن/ویرایش محصول ---
-// این متغیر، محصولی که در حال کار روی آن هستیم (چه جدید چه ویرایشی) را نگه می‌دارد
+const cartStore = useCartStore();
+const cartCount = computed(() => cartStore.items.length);
+
+onMounted(() => {
+  cartStore.initializeCart();
+});
+
 const productForVariantManagement = ref<Product | null>(null);
-// این متغیر فقط برای پاس دادن اولیه به AddProductForm در حالت ویرایش است
 const productToEdit = ref<Product | null>(null);
 
 const openProductDialog = (product: Product | null = null) => {
   if (product) {
-    // حالت ویرایش از صفحه EditProduct (این تابع دیگر اینجا استفاده نمی‌شود)
-    // این منطق باید در EditProduct.vue باشد
-    // productToEdit.value = product; // <-- این خط را حذف یا کامنت کنید
-    // productForVariantManagement.value = product; // <-- این خط را حذف یا کامنت کنید
-    // tab.value = 'details';
   } else {
-    // حالت افزودن از دکمه شناور در Layout
     productToEdit.value = null; // هیچ محصولی برای ویرایش اولیه نیست
     productForVariantManagement.value = null; // هنوز محصولی ساخته نشده
     tab.value = "details";
@@ -43,9 +42,7 @@ const openProductDialog = (product: Product | null = null) => {
   productDialog.value = true;
 };
 
-// این تابع بعد از ثبت/ویرایش محصول پایه در تب اول اجرا می‌شود
 const handleProductSubmitted = (product: Product) => {
-  // محصول ساخته یا ویرایش شده را در state اصلی قرار می‌دهیم
   productForVariantManagement.value = product;
   tab.value = "variants"; // به صورت خودکار به تب دوم می‌رویم
 };
@@ -112,19 +109,29 @@ const closeProductDialog = () => {
             </div>
           </ClientOnly>
           <!-- name & shoppingcard -->
-          <ClientOnly>
-            <NuxtLink v-if="!isLoggedIn" to="/login">
-              <div class="bg-stone-600 !text-white rounded-lg hover:bg-stone-500 transition-all duration-150 px-4 py-2">ورود / ثبت نام</div>
+          <div class="flex items-center gap-3">
+            <ClientOnly>
+              <span v-if="isLoggedIn" class="!text-stone-600 font-semibold">{{ displayName }}</span>
+            </ClientOnly>
+
+            <!-- سبد خرید: همیشه دیده شود -->
+            <NuxtLink to="/shoppingcard" class="cursor-pointer relative" aria-label="سبد خرید">
+              <ClientOnly>
+                <div v-if="cartCount > 0" class="rounded-full bg-red-500 text-xs flex justify-center items-center text-white absolute -top-2 -right-2 px-1 min-w-[18px] h-[18px]">
+                  {{ cartCount }}
+                </div>
+              </ClientOnly>
+              <v-icon class="!text-3xl">mdi-cart-variant</v-icon>
             </NuxtLink>
-            <div v-else class="flex items-center gap-3">
-              <span class="!text-stone-600 font-semibold">{{ displayName }}</span>
-              <NuxtLink to="/shoppingcard" class="cursor-pointer relative">
-                <div class="rounded-full bg-red-500 text-xs flex justify-center items-center text-white absolute -top-2 -right-2 px-1">۳</div>
-                <v-icon class="!text-3xl">mdi-cart-variant</v-icon>
+
+            <!-- ورود/خروج -->
+            <ClientOnly>
+              <NuxtLink v-if="!isLoggedIn" to="/login">
+                <div class="bg-stone-600 !text-white rounded-lg hover:bg-stone-500 transition-all duration-150 px-4 py-2">ورود / ثبت نام</div>
               </NuxtLink>
-              <div @click="authStore.signOut()" class="px-4 py-1 mybg hov cursor-pointer rounded-md">خروج</div>
-            </div>
-          </ClientOnly>
+              <div v-else @click="authStore.signOut()" class="px-4 py-1 mybg hov cursor-pointer rounded-md">خروج</div>
+            </ClientOnly>
+          </div>
         </nav>
       </header>
 

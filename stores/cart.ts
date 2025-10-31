@@ -17,6 +17,7 @@ export interface CartItem {
   stock: number;
 }
 
+const hydrated = ref(false);
 const LOCAL_STORAGE_KEY = "mazinshop_cart";
 
 export const useCartStore = defineStore("cart", () => {
@@ -31,9 +32,9 @@ export const useCartStore = defineStore("cart", () => {
 
   // ۱. ذخیره در لوکال استوریج
   const _saveToLocalStorage = () => {
-    if (import.meta.server) return; // استفاده از import.meta.server
-    // فقط در صورتی در لوکال ذخیره کن که کاربر لاگین *نباشد*
-    if (!authStore.isLoggedIn) {
+    if (import.meta.server) return;
+    // فقط بعد از هیدراته شدن و فقط وقتی کاربر لاگین نیست
+    if (hydrated.value && !authStore.isLoggedIn) {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(items.value));
     }
   };
@@ -140,15 +141,23 @@ export const useCartStore = defineStore("cart", () => {
 
   // این تابع باید در پلاگین auth فراخوانی شود
   const initializeCart = async () => {
-    if (import.meta.server) return; // استفاده از import.meta.server
+    if (import.meta.server) return; // فقط کلاینت
     loading.value = true;
+
     if (authStore.isLoggedIn) {
       items.value = await _fetchDbCart();
     } else {
       const storedCart = localStorage.getItem(LOCAL_STORAGE_KEY);
-      items.value = storedCart ? JSON.parse(storedCart) : [];
+      try {
+        items.value = storedCart ? JSON.parse(storedCart) : [];
+      } catch {
+        items.value = [];
+        localStorage.removeItem(LOCAL_STORAGE_KEY);
+      }
     }
+
     loading.value = false;
+    hydrated.value = true; // ← خیلی مهم
   };
 
   // افزودن آیتم (منطق هیبریدی)
@@ -272,8 +281,8 @@ export const useCartStore = defineStore("cart", () => {
   watch(
     items,
     (newItems) => {
-      if (import.meta.server) return; // استفاده از import.meta.server
-      // فقط در صورتی در لوکال استوریج ذخیره کن که کاربر لاگین *نباشد*
+      if (import.meta.server) return;
+      if (!hydrated.value) return; // ← جلوِ نوشتنِ زودهنگام رو بگیر
       if (!authStore.isLoggedIn) {
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newItems));
       }
