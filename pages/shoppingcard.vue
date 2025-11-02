@@ -1,9 +1,15 @@
 <script setup lang="ts">
 import { useCartStore } from "~/stores/cart";
 import { useToast } from "~/composables/useToast";
+import { useAuthStore } from "~/stores/auth";
+import { ref } from "vue";
+import { useRouter } from "vue-router";
 
 const cartStore = useCartStore();
+const authStore = useAuthStore();
+const router = useRouter();
 const { trigger: showToast } = useToast();
+const showLoginPrompt = ref(false);
 
 // در زمان بارگذاری این صفحه (اگر کاربر مستقیماً وارد شود)
 // سبد خرید را بارگذاری می‌کنیم
@@ -13,6 +19,19 @@ onMounted(() => {
 
 const formatNumber = (num: number) => {
   return num.toLocaleString("fa-IR");
+};
+
+const handleProceedToCheckout = () => {
+  if (cartStore.totalItems === 0) return;
+  if (authStore.isLoggedIn) {
+    router.push("/userInfo");
+  } else {
+    showLoginPrompt.value = true;
+  }
+};
+
+const goToLogin = () => {
+  router.push({ path: "/login", query: { redirect: "/userInfo" } });
 };
 
 const handleUpdateQuantity = async (variantId: number, newQuantity: number) => {
@@ -68,8 +87,18 @@ const handleRemoveItem = (variantId: number) => {
       <v-divider class="my-6"></v-divider>
       <div class="text-left">
         <h2 class="text-2xl font-bold">جمع کل: {{ formatNumber(cartStore.totalPrice) }} تومان</h2>
-        <v-btn color="primary" size="large" class="mt-4" :disabled="cartStore.totalItems === 0"> ادامه جهت تسویه حساب </v-btn>
+        <v-btn color="primary" @click="handleProceedToCheckout" size="large" class="mt-4" :disabled="cartStore.totalItems === 0"> ادامه جهت تسویه حساب </v-btn>
       </div>
     </div>
   </div>
+  <v-dialog v-model="showLoginPrompt" max-width="480">
+    <v-card class="!rounded-xl !p-0">
+      <v-card-title class="text-lg font-bold">نیاز به ورود</v-card-title>
+      <v-card-text class="text-gray-700"> شما هنوز وارد حساب کاربری خود نشده‌اید. لطفاً برای ادامه تسویه‌حساب وارد شوید یا ثبت‌نام کنید. </v-card-text>
+      <v-card-actions class="justify-end gap-2">
+        <v-btn variant="text" @click="showLoginPrompt = false">بعداً</v-btn>
+        <v-btn color="primary" @click="goToLogin">ورود / ثبت‌نام</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
