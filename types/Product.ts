@@ -14,7 +14,8 @@ export interface Product {
   type_id: number;
   image_urls: string[];
   product_variants: ProductVariant[];
+  product_code: string;
 }
 
-export type NewProduct = Omit<Product, "id" | "created_at" | "product_variants">;
+export type NewProduct = Omit<Product, "id" | "created_at" | "product_variants" | "product_code">;
 export type NewVariant = Omit<ProductVariant, "id" | "product_id">;

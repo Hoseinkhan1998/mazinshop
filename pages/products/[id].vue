@@ -132,49 +132,26 @@ const categorizedAttributes = computed(() => {
   return { fixed, variable };
 });
 
-// با انتخاب‌های فعلی (به‌جز یک اتریبیوت مشخص)، کدام وریِنت‌ها سازگارند؟
-function filterVariantsWithPartialSelections(excludeAttr?: string) {
-  const partial = { ...selectedOptions.value };
-  if (excludeAttr) delete partial[excludeAttr];
-
-  return allVariants.value.filter((v) => Object.entries(partial).every(([k, val]) => v.attributes[k] === val));
-}
-
-// فقط گزینه‌های «واقعاً قابل انتخاب» برای یک اتریبیوت (با توجه به انتخاب‌های فعلی سایر اتریبیوت‌ها)
-const getAvailableOptionsForAttribute = (attributeName: string): string[] => {
-  if (!product.value) return [];
-  const compatible = filterVariantsWithPartialSelections(attributeName);
-  const set = new Set<string>();
-  for (const v of compatible) {
-    const val = v.attributes[attributeName];
-    if (val) set.add(val);
-  }
-  return Array.from(set);
-};
-
 // وریِنت انتخاب‌شده بر اساس selectedOptions + fixed attributes
 const selectedVariant = computed<ProductVariant | null>(() => {
   if (!product.value || !product.value.variants) return null;
 
-  const combinedSelections: Record<string, string> = { ...selectedOptions.value };
-  // افزودن fixed attributes
+  // انتخاب‌ها + ثابت‌ها
+  const combined: Record<string, string> = { ...selectedOptions.value };
   categorizedAttributes.value.fixed.forEach((attr) => {
-    combinedSelections[attr.name] = attr.value;
+    combined[attr.name] = attr.value;
   });
 
-  // اگر به تعداد همهٔ اتریبیوت‌ها نرسید، هنوز وریِنت قطعی نداریم
-  if (Object.keys(combinedSelections).length !== typeAttributes.value.length) return null;
+  // اگر هنوز همهٔ ویژگی‌ها انتخاب نشده
+  if (Object.keys(combined).length !== typeAttributes.value.length) return null;
 
-  const selectedKeys = Object.keys(combinedSelections).sort();
-  const selectedAttrsString = JSON.stringify(Object.fromEntries(selectedKeys.map((key) => [key, combinedSelections[key]])));
-
+  // یافتن وریِنت دقیق
   return (
     product.value.variants.find((variant) => {
-      const variantKeys = Object.keys(variant.attributes).sort();
-      if (variantKeys.length !== selectedKeys.length) return false;
-
-      const variantAttrsString = JSON.stringify(Object.fromEntries(variantKeys.map((key) => [key, variant.attributes[key]])));
-      return variantAttrsString === selectedAttrsString;
+      const vKeys = Object.keys(variant.attributes).sort();
+      const cKeys = Object.keys(combined).sort();
+      if (vKeys.length !== cKeys.length) return false;
+      return JSON.stringify(Object.fromEntries(vKeys.map((k) => [k, variant.attributes[k]]))) === JSON.stringify(Object.fromEntries(cKeys.map((k) => [k, combined[k]])));
     }) || null
   );
 });
@@ -182,54 +159,19 @@ const selectedVariant = computed<ProductVariant | null>(() => {
 // قیمت فعلی (null اگر هنوز وریِنت کامل نشده)
 const currentPrice = computed<number | null>(() => selectedVariant.value?.price ?? null);
 
+const isInvalidCombination = computed(() => allVariableSelected.value && !selectedVariant.value && (allVariants.value?.length || 0) > 0);
+
 // ---------- Helpers ----------
 const formatNumber = (num: number | undefined | null) => (num != null ? num.toLocaleString("fa-IR") : "-");
+
+const allVariableSelected = computed(() => categorizedAttributes.value.variable.every((attr) => !!selectedOptions.value[attr.name]));
 
 const selectImage = (index: number) => {
   selectedImageIndex.value = index;
 };
 
-const handleOptionChange = (changedAttributeName: string) => {
-  for (const attr of typeAttributes.value) {
-    const name = attr.name;
-    if (name === changedAttributeName) continue;
-
-    const chosen = selectedOptions.value[name];
-    if (!chosen) continue;
-
-    const allowed = new Set(getAvailableOptionsForAttribute(name));
-    if (!allowed.has(chosen)) {
-      delete selectedOptions.value[name];
-    }
-  }
-
-  if (Object.keys(selectedOptions.value).length === 1) {
-    const remainingAttributes = typeAttributes.value.filter((attr) => !selectedOptions.value[attr.name]);
-    if (remainingAttributes.length === 1) {
-      const remainingAttr = remainingAttributes[0];
-      const availableOptions = getAvailableOptionsForAttribute(remainingAttr.name);
-      selectedOptions.value[remainingAttr.name] = availableOptions[0] || "";
-    }
-  }
-
-  const remaining = allVariants.value.filter((v) => Object.entries(selectedOptions.value).every(([k, val]) => v.attributes[k] === val));
-
-  if (remaining.length === 1) {
-    const only = remaining[0];
-    for (const [k, v] of Object.entries(only.attributes)) {
-      if (!selectedOptions.value[k]) {
-        selectedOptions.value[k] = v;
-      }
-    }
-  }
-
-  const v = selectedVariant.value;
-  if (v) {
-    const existing = cartStore.items.find((i) => i.variantId === v.id);
-    quantity.value = existing ? existing.quantity : 1;
-  } else {
-    quantity.value = 1;
-  }
+const handleOptionChange = () => {
+  quantity.value = 1;
   addedToCart.value = false;
 };
 
@@ -310,9 +252,9 @@ const primaryCtaLabel = computed(() => {
 const primaryCtaIcon = computed(() => (addedToCart.value ? "mdi-cart" : "mdi-cart-plus"));
 
 const isPrimaryCtaDisabled = computed(() => {
-  // اگر قبلاً اضافه شده، باید بتواند به سبد خرید برود، حتی اگر موجودی الان صفر باشد
   if (addedToCart.value) return false;
-  // در حالت افزودن: نیاز به وریِنت معتبر و موجودی > 0
+  // وریِنت معتبر و موجودی > 0 لازم است
+  if (isInvalidCombination.value) return true;
   return !selectedVariant.value || selectedVariant.value.stock_quantity === 0;
 });
 </script>
@@ -351,7 +293,9 @@ const isPrimaryCtaDisabled = computed(() => {
       <!-- Details -->
       <div class="col-span-12 md:col-span-8">
         <h1 class="text-3xl font-bold mb-4">{{ product.title }}</h1>
-
+        <p class="text-sm text-gray-500 mb-4">
+          کد محصول: <span class="font-mono tracking-wide">{{ product.product_code }}</span>
+        </p>
         <p v-if="productType" class="text-lg text-gray-500 mb-4">
           دسته بندی: <strong class="text-gray-700">{{ productType.typename }}</strong>
         </p>
@@ -367,27 +311,29 @@ const isPrimaryCtaDisabled = computed(() => {
           <div v-for="attribute in categorizedAttributes.variable" :key="attribute.id">
             <v-select
               v-model="selectedOptions[attribute.name]"
-              :items="getAvailableOptionsForAttribute(attribute.name)"
+              :items="Array.from(uniqueAttributeValues[attribute.name] || [])"
               :label="attribute.name"
               variant="outlined"
               density="compact"
               hide-details
               clearable
-              @update:modelValue="handleOptionChange(attribute.name)" />
+              @update:modelValue="handleOptionChange" />
           </div>
         </div>
 
         <!-- Price -->
         <div class="mb-6">
-          <p class="text-2xl font-bold text-green-600">
-            <span v-if="currentPrice !== null">{{ formatNumber(currentPrice) }} تومان</span>
-            <span v-else-if="product.variants && product.variants.length > 0" class="text-slate-500"> لطفاً گزینه‌های محصول را انتخاب کنید </span>
-            <span v-else class="text-red-600">ناموجود</span>
+          <p class="text-2xl font-bold">
+            <span v-if="currentPrice !== null" class="text-green-600"> {{ formatNumber(currentPrice) }} تومان </span>
+
+            <span v-else-if="isInvalidCombination" class="text-red-600"> ناموجود </span>
+
+            <span v-else class="text-slate-500"> لطفاً گزینه‌های محصول را انتخاب کنید </span>
           </p>
         </div>
 
         <!-- Quantity -->
-        <div class="my-6">
+        <div v-if="!isInvalidCombination" class="my-6">
           <label class="block text-sm font-medium text-gray-700 mb-2">تعداد:</label>
           <div class="flex items-center">
             <v-btn icon="mdi-plus" size="small" :disabled="!selectedVariant || (selectedVariant && quantity >= selectedVariant.stock_quantity)" @click="increment" />
