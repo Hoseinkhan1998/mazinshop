@@ -8,12 +8,14 @@ import AttributeManager from "~/components/AttributeManager.vue";
 import VariantManager from "~/components/VariantManager.vue";
 import { useToast } from "~/composables/useToast";
 import { useCartStore } from "~/stores/cart";
+import { useRoute } from "vue-router";
 
 const authStore = useAuthStore();
 const { toast } = useToast();
+const route = useRoute();
 
 const isLoggedIn = computed(() => authStore.isLoggedIn);
-const displayName = computed(() => authStore.displayName);
+// const displayName = computed(() => authStore.displayName);
 const isAdmin = computed(() => authStore.isAdmin);
 
 // --- State برای دیالوگ‌ها ---
@@ -61,7 +63,7 @@ const closeProductDialog = () => {
 <template>
   <v-app>
     <div class="relative h-full">
-      <header class="backdrop-blur-2xl sticky top-0 z-30">
+      <header v-if="route.path !== '/login'" class="backdrop-blur-2xl sticky top-0 z-30">
         <nav class="container mx-auto px-10 py-4 flex justify-between items-center">
           <ClientOnly>
             <div class="flex items-center gap-3">
@@ -111,7 +113,7 @@ const closeProductDialog = () => {
           <!-- name & shoppingcard -->
           <div class="flex items-center gap-3">
             <ClientOnly>
-              <span v-if="isLoggedIn" class="!text-stone-600 font-semibold">{{ displayName }}</span>
+              <v-icon class="!text-stone-600 !text-2xl">mdi-account-circle</v-icon>
             </ClientOnly>
 
             <!-- سبد خرید: همیشه دیده شود -->
@@ -135,7 +137,7 @@ const closeProductDialog = () => {
         </nav>
       </header>
 
-      <main class="container mx-auto px-6 py-8">
+      <main class="container" :class="{ 'mx-auto px-6 py-8': route.path !== '/login' }">
         <slot />
       </main>
 

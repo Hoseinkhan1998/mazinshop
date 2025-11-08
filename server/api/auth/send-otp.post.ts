@@ -8,10 +8,7 @@ export default defineEventHandler(async (event: H3Event) => {
 
   const body = await readBody<{ phone: string; full_name: string }>(event);
   const phone = normalizePhone(body?.phone || "");
-  const fullName = (body?.full_name || "").trim();
-  if (!fullName) {
-    throw createError({ statusCode: 400, statusMessage: "نام و نام خانوادگی الزامی است." });
-  }
+  const fullName = (body?.full_name || "").trim(); // اختیاری
 
   // تولید کد 6 رقمی
   const code = randomCode(6);

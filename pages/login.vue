@@ -30,10 +30,6 @@ const sendCode = async () => {
     errorMessage.value = "شماره موبایل نامعتبر است (مثال: 09123456789)";
     return;
   }
-  if (!fullName.value.trim()) {
-    errorMessage.value = "نام و نام خانوادگی الزامی است.";
-    return;
-  }
 
   loading.value = true;
   try {
@@ -80,31 +76,47 @@ const verifyCode = async () => {
 
 <template>
   <ClientOnly>
-    <div class="max-w-md mx-auto mt-10 !p-8 !rounded-xl border shadow-lg bg-white">
-      <h2 class="text-2xl font-bold text-center mb-6">ورود / ثبت‌نام با شماره موبایل</h2>
-
-      <div v-if="step === 'enter-phone'">
-        <div class="mb-4">
-          <v-text-field density="compact" rounded="lg" v-model="phone" label="شماره موبایل (مثال: 09123456789)" variant="outlined" required />
+    <div class="grid grid-cols-2">
+      <div class="flex relative h-screen justify-center items-center">
+        <div class=" absolute top-5 right-5">
+          <router-link to="/" class=" cursor-pointer flex items-center justify-center rounded-lg px-4 py-1 gap-2 border-2 hover:!bg-[#6d5842d2] hover:text-white transition-all duration-150 border-neutral-400">
+               <v-icon class="">mdi-arrow-right-bold-circle-outline</v-icon>
+              <p>بازگشت</p>
+          </router-link>
         </div>
-        <div class="mb-6">
-          <v-text-field density="compact" rounded="lg" v-model="fullName" label="نام و نام خانوادگی" variant="outlined" required />
+        <div class="!p-8 !rounded-xl border shadow-lg bg-white w-1/2">
+          <h2 class="text-2xl font-bold text-center mb-6">ورود / ثبت‌نام</h2>
+
+          <div v-if="step === 'enter-phone'">
+            <div class="mb-4">
+              <v-text-field density="compact" rounded="lg" v-model="phone" label="شماره موبایل (مثال: 09123456789)" variant="outlined" required />
+            </div>
+            <div class="mb-6">
+              <v-text-field density="compact" rounded="lg" v-model="fullName" label="نام و نام خانوادگی (اختیاری)" variant="outlined" />
+            </div>
+
+            <p v-if="errorMessage" class="text-red-500 mb-4 text-sm">{{ errorMessage }}</p>
+
+            <v-btn class="group" :loading="loading" color="primarymain" block @click="sendCode">
+              <v-icon class=" !-mr-10 mb-1 opacity-0 group-hover:!opacity-100 transition-all duration-300 -rotate-45">mdi-send</v-icon>
+              <p class=" mr-5">ارسال کد تایید</p>
+            </v-btn>
+          </div>
+
+          <div v-else>
+            <div class="mb-4">
+              <v-text-field density="compact" rounded="lg" v-model="otp" label="کد تایید" variant="outlined" required />
+            </div>
+
+            <p v-if="errorMessage" class="text-red-500 mb-4 text-sm">{{ errorMessage }}</p>
+
+            <v-btn :loading="loading" color="primary" block @click="verifyCode">تایید و ورود</v-btn>
+            <v-btn variant="text" block class="mt-2" @click="step = 'enter-phone'">ویرایش شماره</v-btn>
+          </div>
         </div>
-
-        <p v-if="errorMessage" class="text-red-500 mb-4 text-sm">{{ errorMessage }}</p>
-
-        <v-btn :loading="loading" color="primary" block @click="sendCode">ارسال کد تایید</v-btn>
       </div>
-
-      <div v-else>
-        <div class="mb-4">
-          <v-text-field density="compact" rounded="lg" v-model="otp" label="کد تایید" variant="outlined" required />
-        </div>
-
-        <p v-if="errorMessage" class="text-red-500 mb-4 text-sm">{{ errorMessage }}</p>
-
-        <v-btn :loading="loading" color="primary" block @click="verifyCode">تایید و ورود</v-btn>
-        <v-btn variant="text" block class="mt-2" @click="step = 'enter-phone'">ویرایش شماره</v-btn>
+      <div class=" h-screen">
+        <img src="/images/login2.png" class=" h-full w-full" alt="">
       </div>
     </div>
   </ClientOnly>
