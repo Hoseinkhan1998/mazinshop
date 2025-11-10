@@ -112,8 +112,9 @@ const closeProductDialog = () => {
           </ClientOnly>
           <!-- name & shoppingcard -->
           <div class="flex items-center gap-3">
-            <ClientOnly>
-              <v-icon class="!text-stone-600 !text-2xl">mdi-account-circle</v-icon>
+
+            <ClientOnly v-if="isLoggedIn">
+              <v-icon class="!text-stone-600 !text-3xl">mdi-account-circle</v-icon>
             </ClientOnly>
 
             <!-- سبد خرید: همیشه دیده شود -->
@@ -137,7 +138,7 @@ const closeProductDialog = () => {
         </nav>
       </header>
 
-      <main class="container" :class="{ 'mx-auto px-6 py-8': route.path !== '/login' }">
+      <main class="" :class="{ 'mx-auto px-6 py-8': route.path !== '/login' }">
         <slot />
       </main>
 

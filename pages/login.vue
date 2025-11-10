@@ -76,47 +76,64 @@ const verifyCode = async () => {
 
 <template>
   <ClientOnly>
-    <div class="grid grid-cols-2">
+    <div class="grid grid-cols-1 lg:grid-cols-2">
       <div class="flex relative h-screen justify-center items-center">
-        <div class=" absolute top-5 right-5">
-          <router-link to="/" class=" cursor-pointer flex items-center justify-center rounded-lg px-4 py-1 gap-2 border-2 hover:!bg-[#6d5842d2] hover:text-white transition-all duration-150 border-neutral-400">
-               <v-icon class="">mdi-arrow-right-bold-circle-outline</v-icon>
-              <p>بازگشت</p>
+        <div class="absolute top-5 right-5">
+          <router-link
+            to="/"
+            class="cursor-pointer flex items-center justify-center rounded-lg px-4 py-1 gap-2 border-2 hover:!bg-[#6d5842d2] lg:!text-black hover:!text-white text-white transition-all duration-150 border-neutral-400">
+            <v-icon class="">mdi-arrow-right-bold-circle-outline</v-icon>
+            <p>بازگشت</p>
           </router-link>
         </div>
-        <div class="!p-8 !rounded-xl border shadow-lg bg-white w-1/2">
-          <h2 class="text-2xl font-bold text-center mb-6">ورود / ثبت‌نام</h2>
+        <!-- login box -->
+        <div class="flex flex-col justify-center items-center w-full h-full">
 
-          <div v-if="step === 'enter-phone'">
-            <div class="mb-4">
-              <v-text-field density="compact" rounded="lg" v-model="phone" label="شماره موبایل (مثال: 09123456789)" variant="outlined" required />
+          <div class="flex w-full h-full justify-center items-center lg:bg-[url()] px-3 bg-center bg-[url(/images/login1.png)]">
+            <div class="!p-8 !rounded-xl border shadow-lg lg:text-black bg-white/60 backdrop-blur-lg w-[60vh]">
+              <h2 class="text-2xl font-bold text-center mb-6 ">ورود / ثبت‌نام</h2>
+
+              <div v-if="step === 'enter-phone'">
+                <div class="mb-4">
+                  <v-text-field
+                    density="compact"
+                    rounded="lg"
+                    type="number"
+                    hide-spin-buttons
+                    v-model="phone"
+                    label="شماره موبایل (مثال: 09123456789)"
+                    variant="outlined"
+                    class=""                    
+                    required />
+                </div>
+                <div class="mb-6">
+                  <v-text-field class=" " density="compact" rounded="lg" v-model="fullName" label="نام و نام خانوادگی (اختیاری)" variant="outlined" />
+                </div>
+
+                <p v-if="errorMessage" class="text-red-500 mb-4 text-sm">{{ errorMessage }}</p>
+
+                <v-btn class="group" :loading="loading" color="primarymain" block @click="sendCode">
+                  <v-icon class="!-mr-10 mb-1 opacity-0 group-hover:!opacity-100 transition-all duration-300 -rotate-45">mdi-send</v-icon>
+                  <p class="mr-5">ارسال کد تایید</p>
+                </v-btn>
+              </div>
+
+              <div v-else>
+                <div class="mb-4">
+                  <v-text-field density="compact" rounded="lg" v-model="otp" label="کد تایید" variant="outlined" required />
+                </div>
+
+                <p v-if="errorMessage" class="text-red-500 mb-4 text-sm">{{ errorMessage }}</p>
+
+                <v-btn :loading="loading" color="primary" block @click="verifyCode">تایید و ورود</v-btn>
+                <v-btn variant="text" block class="mt-2" @click="step = 'enter-phone'">ویرایش شماره</v-btn>
+              </div>
             </div>
-            <div class="mb-6">
-              <v-text-field density="compact" rounded="lg" v-model="fullName" label="نام و نام خانوادگی (اختیاری)" variant="outlined" />
-            </div>
-
-            <p v-if="errorMessage" class="text-red-500 mb-4 text-sm">{{ errorMessage }}</p>
-
-            <v-btn class="group" :loading="loading" color="primarymain" block @click="sendCode">
-              <v-icon class=" !-mr-10 mb-1 opacity-0 group-hover:!opacity-100 transition-all duration-300 -rotate-45">mdi-send</v-icon>
-              <p class=" mr-5">ارسال کد تایید</p>
-            </v-btn>
-          </div>
-
-          <div v-else>
-            <div class="mb-4">
-              <v-text-field density="compact" rounded="lg" v-model="otp" label="کد تایید" variant="outlined" required />
-            </div>
-
-            <p v-if="errorMessage" class="text-red-500 mb-4 text-sm">{{ errorMessage }}</p>
-
-            <v-btn :loading="loading" color="primary" block @click="verifyCode">تایید و ورود</v-btn>
-            <v-btn variant="text" block class="mt-2" @click="step = 'enter-phone'">ویرایش شماره</v-btn>
           </div>
         </div>
       </div>
-      <div class=" h-screen">
-        <img src="/images/login2.png" class=" h-full w-full" alt="">
+      <div class="hidden lg:block h-screen">
+        <img src="/public/images/login2.png" class="h-full w-[1000px]" alt="" />
       </div>
     </div>
   </ClientOnly>
