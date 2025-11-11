@@ -304,70 +304,82 @@ const deleteAddress = async () => {
     addressIdToDelete.value = null;
   }
 };
-
-// تأیید و پرداخت (فعلاً ماک)
-const confirmAndPay = () => {
-  if (!selectedAddressId.value && mode.value !== "create") {
-    showToast("لطفاً یک آدرس را انتخاب کنید یا آدرس جدید ثبت کنید.", "error");
-    return;
-  }
-  // بعداً: ایجاد سفارش (orders + order_items) و رفتن به درگاه
-  showToast("به مرحله پرداخت منتقل می‌شوید (ماک).", "info");
-  // router.push("/payment"); // بعداً
-};
 </script>
 
 <template>
-  <div class="container mx-auto px-4 py-8">
-    <h1  class="text-2xl md:text-3xl font-bold mb-6">اطلاعات ارسال و فاکتور</h1>
-    <div v-if="loading" class="text-center py-10">
-      <v-progress-circular indeterminate color="primary"></v-progress-circular>
-      <p class="mt-2">در حال دریافت اطلاعات...</p>
-    </div>
-
-    <div v-else class="grid grid-cols-12 gap-6">
-      <!-- راست: آدرس/فرم -->      
-      <div class="col-span-6">
+  <ClientOnly>
+    <div class="grid grid-cols-1 lg:grid-cols-2">
+      <div class="flex px-4 relative w-full">
+        <div class="absolute top-5 right-5">
+          <router-link
+            to="/"
+            class="cursor-pointer flex items-center justify-center rounded-lg px-4 py-1 gap-2 border-2 hover:!bg-[#6d5842d2] lg:!text-black hover:!text-white text-white transition-all duration-150 border-neutral-400">
+            <v-icon class="">mdi-arrow-right-bold-circle-outline</v-icon>
+            <p>بازگشت</p>
+          </router-link>
+        </div>
         <!-- حالت انتخاب آدرس‌های موجود -->
-        <div v-if="mode === 'select'">
+        <div class="w-full !mt-20" v-if="mode === 'select'">
           <div class="flex items-center justify-between mb-4">
             <h2 class="text-xl font-semibold">آدرس‌های شما</h2>
             <v-btn color="primary" variant="flat" @click="goAddNew">افزودن آدرس جدید</v-btn>
           </div>
 
           <v-radio-group v-model="selectedAddressId">
-            <v-card v-for="addr in addresses" :key="addr.id" class="mb-3 p-4" :class="[addr.is_default ? 'border-2 border-primary' : 'border']" flat border>
-              <div class="flex items-start gap-3">
-                <v-radio :value="addr.id" color="primary" class="mt-1"></v-radio>
-                <div class="flex-1">
-                  <div class="flex items-center justify-between">
-                    <p class="font-semibold">
-                      {{ addr.title }}
-                      <span v-if="addr.is_default" class="text-xs text-primary ml-2">(پیش‌فرض)</span>
-                    </p>
-                    <p class="text-sm text-gray-600 mt-1">گیرنده: {{ addr.recipient_name }}</p>
-
-                    <div class="flex items-center gap-2">
-                      <v-btn size="small" variant="text" @click="makeDefaultAddress(addr.id)" :disabled="addr.is_default">انتخاب به‌عنوان پیش‌فرض</v-btn>
-                      <v-btn size="small" variant="text" color="red" @click="askDeleteAddress(addr.id)">حذف</v-btn>
-                    </div>
-                  </div>
+            <div
+              v-for="addr in addresses"
+              :key="addr.id"
+              class="flex gap-3 items-center px-3 py-3 rounded-lg"
+              :class="[addr.is_default ? 'border-2 border-primary' : 'border']"
+              flat
+              border>
+              <v-radio :value="addr.id" color="primary" class="mt-1"></v-radio>
+              <div class="grid grid-cols-12">
+                <div class="col-span-3 font-semibold truncate">{{ addr.title }}</div>
+                <div class="col-span-1"><span v-if="addr.is_default" class="text-xs text-primary ml-2">(پیش‌فرض)</span></div>
+                <div class="col-span-6"></div>
+                <div class="col-span-full">
                   <p class="text-sm text-gray-600 mt-1">
                     {{ addr.province }}، {{ addr.city }}، {{ addr.street_address }}، پلاک {{ addr.plaque }}
                     <template v-if="addr.unit">، واحد {{ addr.unit }}</template>
                   </p>
-                  <p class="text-sm text-gray-600 mt-1">کدپستی: {{ addr.postal_code }}</p>
-                  <p class="text-sm text-gray-600 mt-1">
-                    موبایل: {{ addr.phone }} <span v-if="addr.email">| ایمیل: {{ addr.email }}</span>
-                  </p>
                 </div>
               </div>
-            </v-card>
+              <div @click="askDeleteAddress(addr.id)" class="cursor-pointer col-span-1 text-red-600">
+                <v-icon>mdi-delete</v-icon> <v-tooltip activator="parent" location="bottom"> حذف آدرس</v-tooltip>
+              </div>
+
+              <!--  -->
+              <!--  -->
+              <!--  -->
+              <!-- <div class="">
+                <div class="flex items-center justify-between">
+                  <p class="font-semibold">
+                    {{ addr.title }}
+                    <span v-if="addr.is_default" class="text-xs text-primary ml-2">(پیش‌فرض)</span>
+                  </p>
+                  <p class="text-sm text-gray-600 mt-1">گیرنده: {{ addr.recipient_name }}</p>
+
+                  <div class="flex items-center gap-2">
+                    <v-btn size="small" variant="text" @click="makeDefaultAddress(addr.id)" :disabled="addr.is_default">انتخاب به‌عنوان پیش‌فرض</v-btn>
+                    <v-btn size="small" variant="text" color="red" @click="askDeleteAddress(addr.id)">حذف</v-btn>
+                  </div>
+                </div>
+                <p class="text-sm text-gray-600 mt-1">
+                  {{ addr.province }}، {{ addr.city }}، {{ addr.street_address }}، پلاک {{ addr.plaque }}
+                  <template v-if="addr.unit">، واحد {{ addr.unit }}</template>
+                </p>
+                <p class="text-sm text-gray-600 mt-1">کدپستی: {{ addr.postal_code }}</p>
+                <p class="text-sm text-gray-600 mt-1">
+                  موبایل: {{ addr.phone }} <span v-if="addr.email">| ایمیل: {{ addr.email }}</span>
+                </p>
+              </div> -->
+            </div>
           </v-radio-group>
         </div>
 
         <!-- حالت ساخت آدرس جدید -->
-        <div v-else>
+        <div class="w-full !mt-20" v-else>
           <div class="flex items-center justify-between mb-4">
             <h2 class="text-xl font-semibold">افزودن آدرس جدید</h2>
             <v-btn variant="text" @click="mode = addresses.length ? 'select' : 'create'">بازگشت</v-btn>
@@ -433,40 +445,11 @@ const confirmAndPay = () => {
           </div>
         </div>
       </div>
-
-      <!-- چپ: فاکتور خرید -->
-      <div class="col-span-12 md:col-span-5">
-        <v-card flat border class="p-4">
-          <h2 class="text-xl font-semibold mb-4">خلاصه فاکتور</h2>
-
-          <div v-if="cartStore.items.length === 0" class="text-gray-500">سبد خرید شما خالی است.</div>
-
-          <div v-else class="space-y-3">
-            <div v-for="item in cartStore.items" :key="item.variantId" class="flex items-center gap-3">
-              <v-img :src="item.image" width="64" height="64" cover class="rounded-md border"></v-img>
-              <div class="flex-1">
-                <p class="font-medium truncate">{{ item.name }}</p>
-                <p class="text-sm text-gray-500">{{ item.variantName }}</p>
-              </div>
-              <div class="text-left">
-                <p class="text-sm">تعداد: {{ formatNumber(item.quantity) }}</p>
-                <p class="font-semibold">{{ formatNumber(item.price * item.quantity) }} تومان</p>
-              </div>
-            </div>
-
-            <v-divider class="my-4"></v-divider>
-
-            <div class="flex items-center justify-between">
-              <span class="font-semibold">جمع کل</span>
-              <span class="font-bold text-lg">{{ formatNumber(cartStore.totalPrice) }} تومان</span>
-            </div>
-
-            <v-btn color="primary" block class="mt-4" :disabled="cartStore.items.length === 0" @click="confirmAndPay"> تایید و پرداخت </v-btn>
-          </div>
-        </v-card>
+      <div class="hidden lg:block h-screen">
+        <img src="/public/images/login2.png" class="h-full w-full" alt="" />
       </div>
     </div>
-  </div>
+  </ClientOnly>
   <!-- Confirm Delete Address -->
   <v-dialog v-model="confirmDeleteOpen" max-width="420">
     <v-card class="!rounded-xl">

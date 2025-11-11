@@ -69,7 +69,7 @@ const confirmLogout = () => {
 <template>
   <v-app>
     <div class="relative h-full">
-      <header v-if="route.path !== '/login'" class="backdrop-blur-2xl sticky top-0 z-30">
+      <header v-if="route.path !== '/login' && route.path !== '/information'" class="backdrop-blur-2xl sticky top-0 z-30">
         <nav class="container mx-auto px-10 py-4 flex justify-between items-center">
           <ClientOnly>
             <div class="flex items-center gap-3">
@@ -155,7 +155,7 @@ const confirmLogout = () => {
         </nav>
       </header>
 
-      <main class="" :class="{ 'mx-auto px-6 py-8': route.path !== '/login' }">
+      <main class="" :class="{ 'mx-auto px-6 py-8': route.path !== '/login' && route.path !== '/information' }">
         <slot />
       </main>
 
