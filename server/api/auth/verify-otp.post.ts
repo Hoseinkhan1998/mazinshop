@@ -37,7 +37,8 @@ export default defineEventHandler(async (event: H3Event) => {
   await admin.from("phone_otps").update({ consumed: true }).eq("id", otp.id);
 
   // ساخت/آپدیت کاربر در Auth
-  const aliasEmail = `${phone}@${config.authAliasDomain}`;
+  const aliasLocal = `u_${phone}`; 
+  const aliasEmail = `${aliasLocal}@${config.authAliasDomain}`;
   const password = randomPassword();
 
   // تلاش برای یافتن پروفایل با phone_number
@@ -55,7 +56,7 @@ export default defineEventHandler(async (event: H3Event) => {
       password,
     });
     if (createErr && !createErr.message?.includes("already registered")) {
-      console.error("createUser error:", createErr);
+      console.error('createUser error (details):', createErr);
       throw createError({ statusCode: 500, statusMessage: "خطا در ایجاد کاربر" });
     }
     if (created?.user?.id) userId = created.user.id;
@@ -93,6 +94,6 @@ export default defineEventHandler(async (event: H3Event) => {
     },
     body: { email: aliasEmail, password },
   });
- // { access_token, refresh_token, ... }
+  // { access_token, refresh_token, ... }
   return { success: true, tokens };
 });

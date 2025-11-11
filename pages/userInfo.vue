@@ -39,6 +39,7 @@ const loading = ref(true);
 const addresses = ref<Address[]>([]);
 const mode = ref<"select" | "create">("select");
 const selectedAddressId = ref<number | null>(null);
+const userInformation = ref(true);
 
 // فرم آدرس جدید
 const form = ref({
@@ -319,8 +320,7 @@ const confirmAndPay = () => {
 
 <template>
   <div class="container mx-auto px-4 py-8">
-    <h1 class="text-2xl md:text-3xl font-bold mb-6">اطلاعات ارسال و فاکتور</h1>
-
+    <h1  class="text-2xl md:text-3xl font-bold mb-6">اطلاعات ارسال و فاکتور</h1>
     <div v-if="loading" class="text-center py-10">
       <v-progress-circular indeterminate color="primary"></v-progress-circular>
       <p class="mt-2">در حال دریافت اطلاعات...</p>
@@ -328,7 +328,26 @@ const confirmAndPay = () => {
 
     <div v-else class="grid grid-cols-12 gap-6">
       <!-- راست: آدرس/فرم -->
-      <div class="col-span-12 md:col-span-7">
+
+      <div v-if="userInformation" class=" col-span-6 flex flex-col gap-3">
+        <p v-if="userInformation" class="text-xl font-semibold mb-6">مشخصات فردی</p>
+        <div class="">
+          <v-text-field v-model="form.recipient_name" label="نام و نام خانوادگی گیرنده *" variant="outlined" density="compact" hide-details required />
+        </div>
+        <div class="">
+          <v-text-field
+            v-model="form.phone"
+            label="شماره موبایل *"
+            type="number"
+            variant="outlined"
+            density="compact"
+            :rules="phoneRules"
+            hide-spin-buttons
+            :maxlength="11"
+            required />
+        </div>
+      </div>
+      <div class="6">
         <!-- حالت انتخاب آدرس‌های موجود -->
         <div v-if="mode === 'select'">
           <div class="flex items-center justify-between mb-4">
@@ -436,7 +455,7 @@ const confirmAndPay = () => {
       </div>
 
       <!-- چپ: فاکتور خرید -->
-      <div class="col-span-12 md:col-span-5">
+      <div v-if="!userInformation" class="col-span-12 md:col-span-5">
         <v-card flat border class="p-4">
           <h2 class="text-xl font-semibold mb-4">خلاصه فاکتور</h2>
 
