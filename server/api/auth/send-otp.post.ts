@@ -59,5 +59,10 @@ export default defineEventHandler(async (event: H3Event) => {
     return { success: true, sandbox: true, echoCode: code };
   }
 
+  const echoOtp = process.env.ECHO_OTP === "1";
+  if (echoOtp) {
+    return { success: true, sandbox: !!config.smsirSandbox, echoCode: code };
+  }
   return { success: true };
+
 });

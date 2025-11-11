@@ -127,7 +127,7 @@ const confirmLogout = () => {
                 <ul tabindex="0" class="dropdown-content relative menu gap-3 bg-neutral-100 mt-3 rounded-box z-[1] w-44 !p-2 shadow-xl shadow-neutral-200">
                   <li class="cursor-pointer hover:bg-neutral-300 px-4 py-1 transition-all duration-150 rounded-lg">ویرایش پروفایل</li>
                   <li>
-                    <div @click="logoutDialog = true" class="px-4 py-1 bg-red-600 text-white font-semibold hover:bg-red-500 transition-all duration-150 cursor-pointer rounded-md">
+                    <div @click="logoutDialog = true" class="px-4 py-1 bg-red-500 text-white font-semibold hover:bg-red-600 transition-all duration-150 cursor-pointer rounded-md">
                       خروج
                     </div>
                   </li>

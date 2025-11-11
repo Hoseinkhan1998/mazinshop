@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 // import { getSupabaseClient } from "~/utils/supabase";
 import type { User } from "@supabase/supabase-js";
+import { useCartStore } from "~/stores/cart";
 
 // اینترفیس پروفایل را کامل‌تر می‌کنیم
 interface Profile {
@@ -40,14 +41,16 @@ export const useAuthStore = defineStore("auth", {
 
     async fetchUser() {
       const { $supabase } = useNuxtApp();
-      const { data: { user } } = await $supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await $supabase.auth.getUser();
       this.user = user;
 
       if (user) {
         // حالا تمام اطلاعات پروفایل را با select('*') واکشی می‌کنیم
         const { data: profileData, error } = await $supabase
           .from("profiles")
-          .select('*') // <-- تغییر اصلی اینجاست
+          .select("*") // <-- تغییر اصلی اینجاست
           .eq("id", user.id)
           .single();
 
@@ -75,7 +78,7 @@ export const useAuthStore = defineStore("auth", {
         }
       });
     },
-    
+
     async signOut() {
       const cartStore = useCartStore();
       cartStore.clearOnLogout();
