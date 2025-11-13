@@ -15,7 +15,7 @@ const { toast } = useToast();
 const route = useRoute();
 
 const isLoggedIn = computed(() => authStore.isLoggedIn);
-// const displayName = computed(() => authStore.displayName);
+const displayName = computed(() => authStore.profile?.full_name || "کاربر مهمان");
 const isAdmin = computed(() => authStore.isAdmin);
 
 // --- State برای دیالوگ‌ها ---
@@ -122,10 +122,10 @@ const confirmLogout = () => {
               <div class="dropdown dropdown-bottom">
                 <div tabindex="0" role="button" class="flex items-center m-1 gap-2 py-1 border-2 border-neutral-400 border-solid rounded-lg px-4 hov mybg">
                   <v-icon class=" text-white !text-2xl">mdi-account-circle</v-icon>
-                  <p class="">حسین مزینانی</p>
+                  <p class="">{{ displayName }}</p>
                 </div>
                 <ul tabindex="0" class="dropdown-content relative menu gap-3 bg-neutral-100 mt-3 rounded-box z-[1] w-44 !p-2 shadow-xl shadow-neutral-200">
-                  <li class="cursor-pointer hover:bg-neutral-300 px-4 py-1 transition-all duration-150 rounded-lg">ویرایش پروفایل</li>
+                  <NuxtLink to="/information" class="cursor-pointer hover:!bg-neutral-200 px-4 py-1 transition-all duration-150 rounded-lg">ویرایش پروفایل</NuxtLink>
                   <li>
                     <div @click="logoutDialog = true" class="px-4 py-1 bg-red-600 text-white font-semibold hover:bg-red-500 transition-all duration-150 cursor-pointer rounded-md">
                       خروج
