@@ -70,59 +70,33 @@ const confirmLogout = () => {
   <v-app>
     <div class="relative h-full">
       <header v-if="route.path !== '/login' && route.path !== '/information'" class="backdrop-blur-2xl sticky top-0 z-30">
-        <nav class="container mx-auto px-10 py-4 flex justify-between items-center">
-          <ClientOnly>
-            <div class="flex items-center gap-3">
-              <NuxtLink to="/" class="text-xl font-bold text-gray-800">
+        <nav class="container mx-auto px-10 py-4 grid grid-cols-12 items-center">
+          <ClientOnly class="col-span-9">
+            <div class="grid grid-cols-12 items-center">
+              <NuxtLink to="/" class="text-xl col-span-2 font-bold text-gray-800">
                 <img src="/images/logo.png" class="h-14 w-20" alt="" />
               </NuxtLink>
-              <NuxtLink v-if="isAdmin && $route.path !== '/editproduct'" to="/editproduct" class="px-2 rounded-lg mybg hov py-1">ویرایش فروشگاه من</NuxtLink>
-              <div class="ms-10 flex items-center gap-10">
-                <NuxtLink
-                  to="/"
-                  :class="{ 'border-b-2 border-stone-600': $route.path === '/' }"
-                  class="!flex items-center gap-1 cursor-pointer pb-1 hover-underline-animation right">
-                  <v-icon class="text-stone-500">mdi-home-account</v-icon>
-                  <p>خانه</p>
-                </NuxtLink>
-                <NuxtLink
-                  to="/products"
-                  :class="{ 'border-b-2 border-stone-600': $route.path === '/products' }"
-                  class="!flex items-center gap-1 pb-1 cursor-pointer hover-underline-animation right">
-                  <v-icon class="text-stone-500">mdi-package-variant-closed</v-icon>
-                  <p>محصولات</p>
-                </NuxtLink>
-                <NuxtLink
-                  to="/aboutus"
-                  :class="{ 'border-b-2 border-stone-600': $route.path === '/aboutus' }"
-                  class="!flex items-center gap-1 pb-1 cursor-pointer hover-underline-animation right">
-                  <v-icon class="text-stone-500">mdi-account-circle-outline</v-icon>
-                  <p>درباره ما</p>
-                </NuxtLink>
-                <NuxtLink
-                  to="/contactus"
-                  :class="{ 'border-b-2 border-stone-600': $route.path === '/contactus' }"
-                  class="!flex items-center gap-1 pb-1 cursor-pointer hover-underline-animation right">
-                  <v-icon class="text-stone-500">mdi-phone-plus</v-icon>
-                  <p>تماس با ما</p>
-                </NuxtLink>
-                <div class="flex items-center">
+              <div v-if="isAdmin && $route.path !== '/editproduct'" class="col-span-2 !-ms-10">
+                <NuxtLink to="/editproduct" class="px-2 rounded-lg mybg hov py-1">ویرایش فروشگاه من</NuxtLink>
+              </div>
+              <div class="ms-5 col-span-6 flex items-center gap-10">
+                <div class="flex items-center w-full">
                   <v-icon class="absolute !-ml-8 text-stone-500">mdi-magnify</v-icon>
                   <input
                     type="text"
-                    placeholder="جستجو..."
-                    class="rounded-lg border ring-1 !text-sm ring-stone-400 focus:ring-1 focus:ring-stone-600 outline-none px-3 py-1 w-64 pr-10" />
+                    placeholder="جستجو دسته بندی محصول و ..."
+                    class="rounded-lg border w-full ring-1 !text-sm ring-stone-400 focus:ring-1 focus:ring-stone-600 outline-none px-3 py-2 pr-10" />
                 </div>
               </div>
             </div>
           </ClientOnly>
           <!-- name & shoppingcard -->
-          <div class="flex items-center gap-3">
+          <div class="flex items-center gap-3 col-span-3 justify-end">
             <ClientOnly v-if="isLoggedIn">
               <div class="dropdown dropdown-bottom">
                 <div tabindex="0" role="button" class="flex items-center m-1 gap-2 py-1 border-2 border-neutral-400 border-solid rounded-lg px-4 hov mybg">
-                  <v-icon class=" text-white !text-2xl">mdi-account-circle</v-icon>
-                  <p class="">{{ displayName }}</p>
+                  <v-icon class="text-white !text-2xl">mdi-account-circle</v-icon>
+                  <p class="truncate max-w-40">{{ displayName }}</p>
                 </div>
                 <ul tabindex="0" class="dropdown-content relative menu gap-3 bg-neutral-100 mt-3 rounded-box z-[1] w-44 !p-2 shadow-xl shadow-neutral-200">
                   <NuxtLink to="/information" class="cursor-pointer hover:!bg-neutral-200 px-4 py-1 transition-all duration-150 rounded-lg">ویرایش پروفایل</NuxtLink>
@@ -151,6 +125,12 @@ const confirmLogout = () => {
                 <div class="bg-stone-600 !text-white rounded-lg hover:bg-stone-500 transition-all duration-150 px-4 py-2">ورود / ثبت نام</div>
               </NuxtLink>
             </ClientOnly>
+          </div>
+          <!-- navigation types -->
+          <div class="col-span-4 flex items-center gap-5 mt-4 text-sm">
+            <p class="hover-underline-animation right cursor-pointer" :class="{ 'border-b-2 border-stone-600': $route.path === '/type1' }">type1</p>
+            <p class="hover-underline-animation right cursor-pointer" :class="{ 'border-b-2 border-stone-600': $route.path === '/type2' }">type2</p>
+            <p class="hover-underline-animation right cursor-pointer" :class="{ 'border-b-2 border-stone-600': $route.path === '/type3' }">type3</p>
           </div>
         </nav>
       </header>
@@ -250,8 +230,8 @@ const confirmLogout = () => {
             <v-card-text class="!pt-4 !pb-2 !px-5"> آیا مطمئن هستید که می‌خواهید از حساب کاربری خود خارج شوید؟ </v-card-text>
             <v-card-actions class="!px-5 !pb-4">
               <v-spacer></v-spacer>
-              <v-btn class=" rounded-lg" variant="text" @click="logoutDialog = false"> انصراف </v-btn>
-              <v-btn color="error" class=" rounded-lg" variant="flat" @click="confirmLogout"> خروج </v-btn>
+              <v-btn class="rounded-lg" variant="text" @click="logoutDialog = false"> انصراف </v-btn>
+              <v-btn color="error" class="rounded-lg" variant="flat" @click="confirmLogout"> خروج </v-btn>
             </v-card-actions>
           </v-card>
         </v-dialog>

@@ -497,7 +497,11 @@ const deleteAddress = async () => {
               </div>
               <div class="col-span-3 gap-2 flex justify-end items-center text-xs">
                 <div v-if="!addr.is_default" class="mybg hov py-1 cursor-pointer !px-2 rounded-lg text-white" @click="makeDefaultAddress(addr.id)">پیش فرض</div>
-                <v-btn size="small" variant="text" class="!text-blue-600" @click="startEditAddress(addr)">ویرایش</v-btn>
+                <!-- <v-btn size="small" variant="text" class="!text-blue-600" @click="startEditAddress(addr)">ویرایش</v-btn> -->
+                <div @click="startEditAddress(addr)" class="cursor-pointer text-blue-600">
+                  <v-icon>mdi-pencil</v-icon>
+                  <v-tooltip class="text-xs" activator="parent" location="bottom"> ویرایش آدرس</v-tooltip>
+                </div>
                 <div class="cursor-pointer text-red-600" @click="askDeleteAddress(addr.id)">
                   <v-icon>mdi-delete</v-icon>
                   <v-tooltip class="text-xs" activator="parent" location="bottom"> حذف آدرس</v-tooltip>
