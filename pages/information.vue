@@ -16,6 +16,10 @@ const cartStore = useCartStore();
 const router = useRouter();
 const { trigger: showToast } = useToast();
 const confirmDeleteOpen = ref(false);
+const personalFullName = ref(authStore.profile?.full_name || "");
+const personalPhone = ref<string>("");
+const personalNameError = ref<string>("");
+const savingPersonal = ref(false);
 const personal = ref({
   full_name: "",
   phone: "",
@@ -130,6 +134,7 @@ onMounted(async () => {
     await authStore.fetchUser();
   }
 
+  personalPhone.value = authStore.profile?.phone_number || "";
   personal.value.full_name = authStore.profile?.full_name || "";
   personal.value.phone = authStore.profile?.phone_number || "";
 
@@ -143,6 +148,54 @@ watch(
     if (!is) router.replace({ path: "/login", query: { redirect: "/information" } });
   }
 );
+
+watch(
+  () => authStore.profile,
+  (profile) => {
+    if (profile) {
+      if (!personalPhone.value) {
+        personalPhone.value = profile.phone_number || "";
+      }
+      if (!personalFullName.value && profile.full_name) {
+        personalFullName.value = profile.full_name;
+      }
+    }
+  },
+  { immediate: true }
+);
+
+const savePersonalInfo = async () => {
+  personalNameError.value = "";
+
+  if (!personalFullName.value.trim()) {
+    personalNameError.value = "لطفاً نام و نام خانوادگی خود را وارد کنید.";
+    showToast("لطفاً نام و نام خانوادگی خود را وارد کنید.", "error");
+    return;
+  }
+
+  try {
+    savingPersonal.value = true;
+
+    const {
+      data: { session },
+    } = await $supabase.auth.getSession();
+    if (!session?.user) throw new Error("User not authenticated");
+
+    const { error } = await $supabase.from("profiles").update({ full_name: personalFullName.value.trim() }).eq("id", session.user.id);
+
+    if (error) throw error;
+
+    // استور auth را به‌روز می‌کنیم تا هدر هم آپدیت شود
+    await authStore.fetchUser();
+
+    showToast("اطلاعات فردی با موفقیت ذخیره شد.", "success");
+  } catch (e) {
+    console.error(e);
+    showToast("خطا در ذخیره اطلاعات فردی.", "error");
+  } finally {
+    savingPersonal.value = false;
+  }
+};
 
 // ذخیره آدرس جدید
 const saveAddress = async () => {
@@ -456,21 +509,24 @@ const deleteAddress = async () => {
         </div>
         <!-- نام و شماره موبایل -->
         <p class="text-lg font-semibold mb-3 !mt-20">اطلاعات فردی</p>
-        <div class="grid grid-cols-2 items-center gap-4">
-          <v-text-field v-model="personal.full_name" :rules="personalNameRules" rounded="lg" label="نام و نام خانوادگی" variant="outlined" density="compact" required />
+
+        <div class="grid grid-cols-12 items-center gap-4 mb-3">
           <v-text-field
-            v-model="personal.phone"
-            disabled
-            label="شماره موبایل *"
-            type="number"
+            v-model="personalFullName"
             rounded="lg"
+            label="نام و نام خانوادگی"
             variant="outlined"
             density="compact"
-            :rules="phoneRules"
-            hide-spin-buttons
-            :maxlength="11"
-            required />
+            class="col-span-5"
+            :error="!!personalNameError"
+            :error-messages="personalNameError" />
+
+          <v-text-field class="col-span-5" v-model="personalPhone" label="شماره موبایل" type="tel" rounded="lg" variant="outlined" density="compact" disabled />
+          <v-btn color="primary" class="rounded-lg col-span-2 !-mt-6 mybg hov" :disabled="!personalFullName.trim().length" :loading="savingPersonal" @click="savePersonalInfo">
+            ذخیره تغییرات
+          </v-btn>
         </div>
+
         <!-- حالت انتخاب آدرس‌های موجود -->
         <div class="w-full !mt-5" v-if="mode === 'list'">
           <div class="flex items-center justify-between mb-4">
