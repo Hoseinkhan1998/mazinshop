@@ -91,6 +91,19 @@ const formatNumber = (num: number) => {
   return num.toLocaleString("fa-IR");
 };
 
+// نقشه type_id → نام دسته‌بندی
+const typeNameMap = computed(() => {
+  const m = new Map<number, string>();
+  for (const t of typesStore.types) {
+    m.set(t.id, t.typename);
+  }
+  return m;
+});
+
+const getTypeName = (product: Product) => {
+  return typeNameMap.value.get(product.type_id) || "نامشخص";
+};
+
 // تابع برای محاسبه و نمایش بازه قیمتی
 const getPriceRange = (product: Product): string => {
   if (!Array.isArray(product.product_variants) || product.product_variants.length === 0) {
@@ -112,33 +125,156 @@ const getPriceRange = (product: Product): string => {
   return `از ${formatNumber(minPrice)} تا ${formatNumber(maxPrice)} تومان`;
 };
 
+// ---------- پروداکت جنریتور (۵۰تایی) برای حالت سرچ + type ----------
+const MAX_PRODUCTS = 50;
+
+// خروجی این تابع: لیست محصولات + این‌که آیا مجبور شدیم از چند دسته استفاده کنیم یا نه
+const aggregationResult = computed<{
+  list: Product[];
+  mixed: boolean;
+}>(() => {
+  // فقط زمانی پروداکت‌جنریتور فعال است که:
+  // ۱) سرچ داشته باشیم
+  // ۲) یک type مشخص شده باشد (یعنی از دراپ‌داون انتخاب شده باشد)
+  if (!hasSearch.value || !currentTypeId.value) {
+    return { list: [], mixed: false };
+  }
+
+  const allProducts = productStore.products;
+  if (!allProducts.length) return { list: [], mixed: false };
+
+  const primaryTypeId = currentTypeId.value;
+  const q = searchQuery.value.toLowerCase();
+
+  const matchesByType = new Map<number, Product[]>();
+  const nonMatchesByType = new Map<number, Product[]>();
+
+  for (const p of allProducts) {
+    const tId = p.type_id;
+    if (!tId) continue;
+    const matches = p.title.toLowerCase().includes(q);
+    const map = matches ? matchesByType : nonMatchesByType;
+    const arr = map.get(tId) || [];
+    arr.push(p);
+    map.set(tId, arr);
+  }
+
+  const list: Product[] = [];
+  const usedIds = new Set<number>();
+  let mixed = false;
+
+  const pushFromList = (items: Product[] | undefined, typeIdForItems: number) => {
+    if (!items) return;
+    for (const p of items) {
+      if (list.length >= MAX_PRODUCTS) break;
+      if (usedIds.has(p.id)) continue;
+      if (p.type_id !== primaryTypeId) mixed = true;
+      list.push(p);
+      usedIds.add(p.id);
+    }
+  };
+
+  // ۱) ابتدا: محصولات مچ‌شده در type اصلی
+  pushFromList(matchesByType.get(primaryTypeId), primaryTypeId);
+
+  // ۲) اگر کافی نبود: بقیه محصولات type اصلی (حتی اگر مچ نباشند)
+  if (list.length < MAX_PRODUCTS) {
+    pushFromList(nonMatchesByType.get(primaryTypeId), primaryTypeId);
+  }
+
+  // ۳) نوع‌های دیگری که مچ دارند (همان‌هایی که در دراپ‌داون می‌دیدیم)
+  const otherTypeIds = Array.from(matchesByType.keys()).filter((tid) => tid !== primaryTypeId);
+
+  for (const tid of otherTypeIds) {
+    if (list.length >= MAX_PRODUCTS) break;
+    // اول محصولات مچ‌شده در این دسته
+    pushFromList(matchesByType.get(tid), tid);
+    // بعد اگر هنوز جا داریم، بقیه محصولات این دسته
+    if (list.length < MAX_PRODUCTS) {
+      pushFromList(nonMatchesByType.get(tid), tid);
+    }
+  }
+
+  // ۴) اگر هنوز به ۵۰ نرسیدیم: از بقیه محصولات غیرمچ هر دسته، تا جایی که می‌شود پر کنیم
+  if (list.length < MAX_PRODUCTS) {
+    const allNonMatchesFlat: Product[] = [];
+    for (const [, arr] of nonMatchesByType.entries()) {
+      allNonMatchesFlat.push(...arr);
+    }
+    for (const p of allNonMatchesFlat) {
+      if (list.length >= MAX_PRODUCTS) break;
+      if (usedIds.has(p.id)) continue;
+      if (p.type_id !== primaryTypeId) mixed = true;
+      list.push(p);
+      usedIds.add(p.id);
+    }
+  }
+
+  return { list, mixed };
+});
+
+// آیا نتایجِ حالت سرچ + type، چنددسته‌ای شده؟
+const hasMixedTypes = computed(() => {
+  // فقط زمانی معنی دارد که سرچ و type هر دو باشند
+  if (!hasSearch.value || !currentTypeId.value) return false;
+  return aggregationResult.value.mixed;
+});
+
 // ---------- محصولات نهایی برای نمایش ----------
 const shownProducts = computed<Product[]>(() => {
-  let list = productStore.products;
+  const allProducts = productStore.products;
+  if (!allProducts.length) return [];
 
-  // اول بر اساس type (اگر هست)
-  if (currentTypeId.value) {
-    list = list.filter((p) => p.type_id === currentTypeId.value);
+  // حالت ۱: هیچ سرچ نیست ⇒ رفتار قبلی (type + فیلتر ویژگی‌ها)
+  if (!hasSearch.value) {
+    let list = allProducts;
+
+    if (currentTypeId.value) {
+      list = list.filter((p) => p.type_id === currentTypeId.value);
+    }
+
+    if (!currentTypeId.value) {
+      return list;
+    }
+
+    // فیلترهای ویژگی
+    const activeFilters = Object.entries(selectedFilters.value).filter(([, values]) => values && values.length > 0);
+    if (activeFilters.length === 0) {
+      return list;
+    }
+
+    return list.filter((product) => {
+      if (!product.product_variants || product.product_variants.length === 0) return false;
+
+      return product.product_variants.some((variant) => {
+        const attrs = variant.attributes as Record<string, string>;
+        return activeFilters.every(([attrName, values]) => {
+          const vVal = attrs[attrName];
+          if (!vVal) return false;
+          return (values as string[]).includes(vVal);
+        });
+      });
+    });
   }
 
-  // بعد بر اساس متن سرچ (اگر هست)
-  if (hasSearch.value) {
+  // حالت ۲: سرچ هست ولی type نیست ⇒ سرچ سراسری ساده، بدون فیلتر
+  if (hasSearch.value && !currentTypeId.value) {
     const q = searchQuery.value.toLowerCase();
-    list = list.filter((p) => p.title.toLowerCase().includes(q));
+    return allProducts.filter((p) => p.title.toLowerCase().includes(q));
   }
 
-  // اگر type نداریم (یعنی سرچ سراسری بدون دسته) ⇒ اصلاً فیلترهای attribute اعمال نمی‌شوند
-  if (!currentTypeId.value) {
-    return list;
-  }
+  // حالت ۳: سرچ + type ⇒ پروداکت‌جنریتور ۵۰تایی
+  const { list, mixed } = aggregationResult.value;
 
-  // فیلترهای ویژگی‌ها
+  // اگر mixed=true شده یعنی از چند دسته‌بندی استفاده کرده‌ایم
+  // در این صورت فیلترهای ویژگی را نادیده می‌گیریم (و در UI هم نشان نمی‌دهیم)
   const activeFilters = Object.entries(selectedFilters.value).filter(([, values]) => values && values.length > 0);
-  if (activeFilters.length === 0) {
+  if (mixed || activeFilters.length === 0) {
     return list;
   }
 
-  // برای هر محصول، اگر حداقل یک variant داشته باشد که تمام فیلترها را پاس کند ⇒ نگه می‌داریم
+  // mixed = false ⇒ یعنی همهٔ نتایج از همان type اصلی هستند
+  // در این حالت، فیلتر ویژگی‌ها روی همین لیست اعمال می‌شود
   return list.filter((product) => {
     if (!product.product_variants || product.product_variants.length === 0) return false;
 
@@ -173,10 +309,15 @@ const toggleFilter = (attrName: string, value: string, checked: boolean) => {
     <div v-else-if="!productStore.products || productStore.products.length === 0" class="text-center text-gray-500">محصولی برای نمایش وجود ندارد.</div>
 
     <div v-else class="grid grid-cols-12 gap-5">
-      <!-- ستون فیلتر -->
       <div class="col-span-3">
-        <!-- اگر type نداریم و فقط سرچ هست ⇒ بدون فیلتر -->
-        <template v-if="!currentType && hasSearch">
+        <!-- حالت ویژه: نتایج چنددسته‌ای (پروداکت‌جنریتور مجبور شده از چند type استفاده کند) -->
+        <template v-if="hasMixedTypes">
+          <h2 class="text-2xl font-semibold mb-2">بدون فیلتر</h2>
+          <p class="mt-2 text-sm text-gray-500">نتایج جستجو برای «{{ searchQuery }}» در چند دسته‌بندی</p>
+        </template>
+
+        <!-- اگر type نداریم و فقط سرچ هست ⇒ بدون فیلتر (سرچ سراسری) -->
+        <template v-else-if="!currentType && hasSearch">
           <h2 class="text-2xl font-semibold mb-2">بدون فیلتر</h2>
           <p class="mt-2 text-sm text-gray-500">نتایج جستجو برای «{{ searchQuery }}»</p>
         </template>
@@ -250,6 +391,13 @@ const toggleFilter = (attrName: string, value: string, checked: boolean) => {
             <h2 class="text-xl font-semibold mb-2 truncate">
               {{ product.title }}
             </h2>
+            <!-- دسته‌بندی محصول -->
+            <p class="text-xs text-gray-500 mb-2">
+              دسته‌بندی:
+              <span class="font-medium">
+                {{ getTypeName(product) }}
+              </span>
+            </p>
             <div class="flex-grow"></div>
             <div class="flex justify-between items-center mt-4">
               <p class="text-lg font-bold text-green-600">
