@@ -12,6 +12,8 @@ export interface Attribute {
 export const useAttributesStore = defineStore("attributes", {
   state: () => ({
     attributes: [] as Attribute[],
+    attributesLastFetchedAt: null as number | null,
+    attributesCacheHydrated: false,
   }),
   actions: {
     // این اکشن لیست مقادیر را برای یک زوج نوع-ویژگی به صورت کامل سینک می‌کند
@@ -108,18 +110,58 @@ export const useAttributesStore = defineStore("attributes", {
     },
     // واکشی تمام ویژگی‌ها
     async fetchAttributes(force: boolean = false) {
-      if (!force && this.attributes.length > 0) return;
-      if (this.attributes.length > 0) return;
       const config = useRuntimeConfig();
-      const url = `${config.public.supabaseUrl}/rest/v1/attributes?select=*`;
-      try {
-        const response = await axios.get(url, {
-          headers: { apikey: config.public.supabaseKey },
-        });
-        this.attributes = response.data;
-      } catch (error) {
-        console.error("Error fetching attributes:", error);
+      const CACHE_KEY = "mazin_attributes_cache_v1";
+      const CACHE_TTL = 1000 * 60 * 60 * 24; // مثلا ۱ روز – خیلی کم عوض میشن
+      const now = Date.now();
+
+      // ۱) هیدرات از localStorage
+      if (import.meta.client && !this.attributesCacheHydrated) {
+        this.attributesCacheHydrated = true;
+        try {
+          const raw = localStorage.getItem(CACHE_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed.data)) {
+              this.attributes = parsed.data;
+              this.attributesLastFetchedAt = parsed.ts || null;
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to read attributes cache:", e);
+          localStorage.removeItem(CACHE_KEY);
+        }
       }
+
+      const hasFreshEnough = !force && this.attributes.length > 0 && this.attributesLastFetchedAt !== null && now - this.attributesLastFetchedAt < CACHE_TTL;
+
+      const fetchFromNetwork = async () => {
+        try {
+          const url = `${config.public.supabaseUrl}/rest/v1/attributes?select=*`;
+          const response = await axios.get(url, {
+            headers: { apikey: config.public.supabaseKey },
+          });
+          this.attributes = response.data;
+          this.attributesLastFetchedAt = Date.now();
+
+          if (import.meta.client) {
+            try {
+              localStorage.setItem(CACHE_KEY, JSON.stringify({ data: this.attributes, ts: this.attributesLastFetchedAt }));
+            } catch (e) {
+              console.warn("Failed to write attributes cache:", e);
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching attributes:", error);
+        }
+      };
+
+      if (hasFreshEnough && !force) {
+        fetchFromNetwork().catch((err) => console.error("Background fetchAttributes error:", err));
+        return;
+      }
+
+      await fetchFromNetwork();
     },
 
     // افزودن یک ویژگی جدید

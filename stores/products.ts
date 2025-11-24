@@ -7,21 +7,48 @@ export const useProductStore = defineStore("product", {
   state: () => ({
     products: [] as Product[],
     currentProductDetails: null as any,
+
+    productsLastFetchedAt: null as number | null,
+    productsCacheHydrated: false,
   }),
 
   actions: {
-    async fetchProducts() {
+    async fetchProducts(force: boolean = false) {
       const config = useRuntimeConfig();
-      const { $supabase } = useNuxtApp(); // از پلاگین استفاده می‌کنیم
+      const { $supabase } = useNuxtApp();
 
-      const {
-        data: { session },
-      } = await $supabase.auth.getSession();
-      const token = session?.access_token;
+      const CACHE_KEY = "mazin_products_cache_v1";
+      const CACHE_TTL = 1000 * 60 * 5; // ۵ دقیقه – هر وقت خواستی عوضش کن
+      const now = Date.now();
 
-      const url = `${config.public.supabaseUrl}/rest/v1/products?select=*,product_variants(*)`;
+      // --- ۱) فقط یک‌بار: هیدرات از localStorage (سمت کلاینت) ---
+      if (import.meta.client && !this.productsCacheHydrated) {
+        this.productsCacheHydrated = true;
+        try {
+          const raw = localStorage.getItem(CACHE_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed.data)) {
+              this.products = parsed.data;
+              this.productsLastFetchedAt = parsed.ts || null;
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to read products cache:", e);
+          localStorage.removeItem(CACHE_KEY);
+        }
+      }
 
-      try {
+      const hasFreshEnough = !force && this.products.length > 0 && this.productsLastFetchedAt !== null && now - this.productsLastFetchedAt < CACHE_TTL;
+
+      const fetchFromNetwork = async () => {
+        const {
+          data: { session },
+        } = await $supabase.auth.getSession();
+        const token = session?.access_token;
+
+        const url = `${config.public.supabaseUrl}/rest/v1/products?select=*,product_variants(*)`;
+
         const response = await axios.get(url, {
           headers: {
             apikey: config.public.supabaseKey,
@@ -33,10 +60,25 @@ export const useProductStore = defineStore("product", {
           ...product,
           product_variants: Array.isArray(product.product_variants) ? product.product_variants : [],
         }));
+
         this.products = cleanData;
-      } catch (error) {
-        console.error("Error fetching products:", error);
+        this.productsLastFetchedAt = Date.now();
+
+        if (import.meta.client) {
+          try {
+            localStorage.setItem(CACHE_KEY, JSON.stringify({ data: cleanData, ts: this.productsLastFetchedAt }));
+          } catch (e) {
+            console.warn("Failed to write products cache:", e);
+          }
+        }
+      };
+
+      if (hasFreshEnough) {
+        fetchFromNetwork().catch((err) => console.error("Background fetchProducts error:", err));
+        return;
       }
+
+      await fetchFromNetwork();
     },
 
     async fetchProductDetails(productId: number) {

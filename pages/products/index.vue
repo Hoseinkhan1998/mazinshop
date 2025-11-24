@@ -12,7 +12,7 @@ const router = useRouter();
 
 const loading = ref(true);
 
-// فیلترهای انتخاب شده: کلید = نام ویژگی، مقدار = آرایه مقادیر انتخاب شده
+// فیلترهای ویژگی‌ها: کلید = نام ویژگی، مقدار = آرایه مقادیر انتخاب شده
 const selectedFilters = ref<Record<string, string[]>>({});
 
 // گزینه‌های هر ویژگی برای type فعلی (attribute_id -> [values])
@@ -73,7 +73,7 @@ onMounted(async () => {
   loading.value = false;
 });
 
-// وقتی type در URL عوض شد ⇒ فیلترها ریست و options لود
+// وقتی type در URL عوض شد ⇒ فیلترهای ویژگی ریست و options لود
 watch(
   () => route.query.type,
   async () => {
@@ -86,8 +86,17 @@ watch(
   }
 );
 
-// ---------- Helpers ----------
-const formatNumber = (num: number) => {
+// هر بار که type یا search عوض می‌شود، فیلتر قیمت ریست شود
+watch(
+  () => [currentTypeId.value, searchQuery.value],
+  () => {
+    appliedPriceRange.value = null;
+  }
+);
+
+// ---------- Helpers عمومی ----------
+const formatNumber = (num: number | null | undefined) => {
+  if (num == null) return "";
   return num.toLocaleString("fa-IR");
 };
 
@@ -104,7 +113,7 @@ const getTypeName = (product: Product) => {
   return typeNameMap.value.get(product.type_id) || "نامشخص";
 };
 
-// تابع برای محاسبه و نمایش بازه قیمتی
+// تابع برای محاسبه و نمایش بازه قیمتی در کارت محصول
 const getPriceRange = (product: Product): string => {
   if (!Array.isArray(product.product_variants) || product.product_variants.length === 0) {
     return "ناموجود";
@@ -125,35 +134,51 @@ const getPriceRange = (product: Product): string => {
   return `از ${formatNumber(minPrice)} تا ${formatNumber(maxPrice)} تومان`;
 };
 
-// ---------- پروداکت جنریتور (۵۰تایی) برای حالت سرچ + type ----------
+// کمترین قیمت یک محصول (برای مرتب‌سازی و فیلتر)
+const getProductMinPrice = (product: Product): number => {
+  if (!Array.isArray(product.product_variants) || product.product_variants.length === 0) {
+    return Number.POSITIVE_INFINITY;
+  }
+  const prices = product.product_variants.map((v) => v.price).filter((p) => typeof p === "number");
+  if (!prices.length) return Number.POSITIVE_INFINITY;
+  return Math.min(...prices);
+};
+
+// ---------- پروداکت جنریتور (۵۰تایی) برای حالت‌های سرچ ----------
+
 const MAX_PRODUCTS = 50;
 
-// خروجی این تابع: لیست محصولات + این‌که آیا مجبور شدیم از چند دسته استفاده کنیم یا نه
 const aggregationResult = computed<{
   list: Product[];
-  mixed: boolean;
+  mixed: boolean; // فقط در حالت سرچ + type برای تشخیص چنددسته‌ای بودن
 }>(() => {
-  // فقط زمانی پروداکت‌جنریتور فعال است که:
-  // ۱) سرچ داشته باشیم
-  // ۲) یک type مشخص شده باشد (یعنی از دراپ‌داون انتخاب شده باشد)
-  if (!hasSearch.value || !currentTypeId.value) {
+  // اگر اصلاً سرچ نداریم، این تابع استفاده نمی‌شود
+  if (!hasSearch.value) {
     return { list: [], mixed: false };
   }
 
   const allProducts = productStore.products;
-  if (!allProducts.length) return { list: [], mixed: false };
+  if (!allProducts.length) {
+    return { list: [], mixed: false };
+  }
 
-  const primaryTypeId = currentTypeId.value;
+  const primaryTypeId = currentTypeId.value; // ممکنه null باشه (وقتی فقط سرچ شده)
   const q = searchQuery.value.toLowerCase();
 
+  // تقسیم محصولات به "مچ‌شده" و "غیر مچ" بر اساس type
   const matchesByType = new Map<number, Product[]>();
   const nonMatchesByType = new Map<number, Product[]>();
+  const allTypeIdsSet = new Set<number>();
 
   for (const p of allProducts) {
-    const tId = p.type_id;
+    const tId = p.type_id as number | null;
     if (!tId) continue;
+
+    allTypeIdsSet.add(tId);
+
     const matches = p.title.toLowerCase().includes(q);
     const map = matches ? matchesByType : nonMatchesByType;
+
     const arr = map.get(tId) || [];
     arr.push(p);
     map.set(tId, arr);
@@ -163,81 +188,143 @@ const aggregationResult = computed<{
   const usedIds = new Set<number>();
   let mixed = false;
 
-  const pushFromList = (items: Product[] | undefined, typeIdForItems: number) => {
+  const pushFromList = (items: Product[] | undefined, typeIdForItems?: number) => {
     if (!items) return;
+
     for (const p of items) {
       if (list.length >= MAX_PRODUCTS) break;
       if (usedIds.has(p.id)) continue;
-      if (p.type_id !== primaryTypeId) mixed = true;
+
+      // فقط وقتی type مشخص شده (سرچ + دسته) و داریم از دسته‌ی دیگری آیتم می‌آوریم
+      if (primaryTypeId && typeIdForItems && typeIdForItems !== primaryTypeId) {
+        mixed = true;
+      }
+
       list.push(p);
       usedIds.add(p.id);
     }
   };
 
-  // ۱) ابتدا: محصولات مچ‌شده در type اصلی
-  pushFromList(matchesByType.get(primaryTypeId), primaryTypeId);
+  const matchesTypeIds = Array.from(matchesByType.keys()); // دسته‌هایی که حداقل ۱ مچ دارند
+  const allTypeIds = Array.from(allTypeIdsSet); // همه‌ی دسته‌ها
 
-  // ۲) اگر کافی نبود: بقیه محصولات type اصلی (حتی اگر مچ نباشند)
-  if (list.length < MAX_PRODUCTS) {
-    pushFromList(nonMatchesByType.get(primaryTypeId), primaryTypeId);
-  }
+  if (primaryTypeId) {
+    // =========================
+    // حالت ۱: سرچ + انتخاب دسته از دراپ‌داون
+    // =========================
+    // ترتیب مدنظر تو:
+    // 1) مچ‌ها در دسته انتخاب‌شده
+    // 2) مچ‌ها در بقیه دسته‌هایی که مچ دارند
+    // 3) غیرمچ‌های دسته انتخاب‌شده
+    // 4) غیرمچ‌های بقیه دسته‌هایی که مچ داشتند
+    // 5) بقیه محصولات دسته‌های دیگر (هرچه هست)
 
-  // ۳) نوع‌های دیگری که مچ دارند (همان‌هایی که در دراپ‌داون می‌دیدیم)
-  const otherTypeIds = Array.from(matchesByType.keys()).filter((tid) => tid !== primaryTypeId);
+    // 1) مچ‌ها در دسته انتخاب‌شده
+    pushFromList(matchesByType.get(primaryTypeId), primaryTypeId);
 
-  for (const tid of otherTypeIds) {
-    if (list.length >= MAX_PRODUCTS) break;
-    // اول محصولات مچ‌شده در این دسته
-    pushFromList(matchesByType.get(tid), tid);
-    // بعد اگر هنوز جا داریم، بقیه محصولات این دسته
-    if (list.length < MAX_PRODUCTS) {
-      pushFromList(nonMatchesByType.get(tid), tid);
-    }
-  }
-
-  // ۴) اگر هنوز به ۵۰ نرسیدیم: از بقیه محصولات غیرمچ هر دسته، تا جایی که می‌شود پر کنیم
-  if (list.length < MAX_PRODUCTS) {
-    const allNonMatchesFlat: Product[] = [];
-    for (const [, arr] of nonMatchesByType.entries()) {
-      allNonMatchesFlat.push(...arr);
-    }
-    for (const p of allNonMatchesFlat) {
+    // 2) مچ‌ها در بقیه دسته‌هایی که مچ دارند
+    const otherMatchedTypeIds = matchesTypeIds.filter((tid) => tid !== primaryTypeId);
+    for (const tid of otherMatchedTypeIds) {
       if (list.length >= MAX_PRODUCTS) break;
-      if (usedIds.has(p.id)) continue;
-      if (p.type_id !== primaryTypeId) mixed = true;
-      list.push(p);
-      usedIds.add(p.id);
+      pushFromList(matchesByType.get(tid), tid);
     }
+
+    // 3) غیرمچ‌های دسته انتخاب‌شده
+    if (list.length < MAX_PRODUCTS) {
+      pushFromList(nonMatchesByType.get(primaryTypeId), primaryTypeId);
+    }
+
+    // 4) غیرمچ‌های بقیه دسته‌هایی که مچ داشتند
+    if (list.length < MAX_PRODUCTS) {
+      for (const tid of otherMatchedTypeIds) {
+        if (list.length >= MAX_PRODUCTS) break;
+        pushFromList(nonMatchesByType.get(tid), tid);
+      }
+    }
+
+    // 5) دسته‌هایی که هیچ مچ نداشتند ⇒ هرچی محصول دارند (غیرمچ‌ها)
+    if (list.length < MAX_PRODUCTS) {
+      const remainingTypeIds = allTypeIds.filter((tid) => tid !== primaryTypeId && !matchesByType.has(tid));
+
+      for (const tid of remainingTypeIds) {
+        if (list.length >= MAX_PRODUCTS) break;
+        pushFromList(nonMatchesByType.get(tid), tid);
+      }
+    }
+  } else {
+    // =========================
+    // حالت ۲: فقط سرچ (Enter / آیکون)، بدون انتخاب دسته
+    // =========================
+    // ترتیب مدنظر:
+    // 1) همه‌ی محصولات مچ‌شده از همه دسته‌ها
+    // 2) غیرمچ‌های همان دسته‌هایی که مچ داشتند
+    // 3) محصولات دسته‌هایی که هیچ مچ نداشتند
+
+    // 1) مچ‌ها در همه دسته‌ها
+    for (const tid of matchesTypeIds) {
+      if (list.length >= MAX_PRODUCTS) break;
+      pushFromList(matchesByType.get(tid), tid);
+    }
+
+    // 2) غیرمچ‌های همان دسته‌هایی که مچ داشتند
+    if (list.length < MAX_PRODUCTS) {
+      for (const tid of matchesTypeIds) {
+        if (list.length >= MAX_PRODUCTS) break;
+        pushFromList(nonMatchesByType.get(tid), tid);
+      }
+    }
+
+    // 3) دسته‌هایی که هیچ مچ نداشتند ⇒ همه محصولاتشان
+    if (list.length < MAX_PRODUCTS) {
+      const remainingTypeIds = allTypeIds.filter((tid) => !matchesByType.has(tid));
+
+      for (const tid of remainingTypeIds) {
+        if (list.length >= MAX_PRODUCTS) break;
+        pushFromList(nonMatchesByType.get(tid), tid);
+      }
+    }
+
+    // mixed این‌جا فقط informativه (در UI برای فیلتر ویژگی استفاده نمی‌کنیم)
+    const typeSet = new Set<number>();
+    for (const p of list) {
+      if (p.type_id) typeSet.add(p.type_id);
+    }
+    mixed = typeSet.size > 1;
   }
 
   return { list, mixed };
 });
 
-// آیا نتایجِ حالت سرچ + type، چنددسته‌ای شده؟
+// آیا در حالت سرچ + type، مجبور شدیم از چند دسته محصول بیاوریم؟
 const hasMixedTypes = computed(() => {
-  // فقط زمانی معنی دارد که سرچ و type هر دو باشند
   if (!hasSearch.value || !currentTypeId.value) return false;
   return aggregationResult.value.mixed;
 });
 
-// ---------- محصولات نهایی برای نمایش ----------
-const shownProducts = computed<Product[]>(() => {
+// ---------- لیست پایه محصولات (بدون فیلتر قیمت و مرتب‌سازی) ----------
+// ---------- لیست پایه محصولات (قبل از فیلتر قیمت و مرتب‌سازی) ----------
+
+const baseProducts = computed<Product[]>(() => {
   const allProducts = productStore.products;
   if (!allProducts.length) return [];
 
-  // حالت ۱: هیچ سرچ نیست ⇒ رفتار قبلی (type + فیلتر ویژگی‌ها)
+  // =========================
+  // حالت بدون سرچ ⇒ رفتار قبلی
+  // =========================
   if (!hasSearch.value) {
     let list = allProducts;
 
+    // فیلتر بر اساس type (دسته انتخاب‌شده از هدر)
     if (currentTypeId.value) {
       list = list.filter((p) => p.type_id === currentTypeId.value);
     }
 
+    // اگر type نداریم، فقط همین لیست را برگردان
     if (!currentTypeId.value) {
       return list;
     }
 
-    // فیلترهای ویژگی
+    // فیلتر ویژگی‌ها
     const activeFilters = Object.entries(selectedFilters.value).filter(([, values]) => values && values.length > 0);
     if (activeFilters.length === 0) {
       return list;
@@ -257,24 +344,25 @@ const shownProducts = computed<Product[]>(() => {
     });
   }
 
-  // حالت ۲: سرچ هست ولی type نیست ⇒ سرچ سراسری ساده، بدون فیلتر
-  if (hasSearch.value && !currentTypeId.value) {
-    const q = searchQuery.value.toLowerCase();
-    return allProducts.filter((p) => p.title.toLowerCase().includes(q));
-  }
-
-  // حالت ۳: سرچ + type ⇒ پروداکت‌جنریتور ۵۰تایی
+  // =========================
+  // از اینجا به بعد حتما سرچ داریم
+  // =========================
   const { list, mixed } = aggregationResult.value;
 
-  // اگر mixed=true شده یعنی از چند دسته‌بندی استفاده کرده‌ایم
-  // در این صورت فیلترهای ویژگی را نادیده می‌گیریم (و در UI هم نشان نمی‌دهیم)
+  // حالت سرچ بدون type ⇒ فقط همون لیست پروداکت‌جنریتور، بدون فیلتر ویژگی
+  if (!currentTypeId.value) {
+    return list;
+  }
+
+  // حالت سرچ + type:
+  // اگر mixed=true یعنی طبق پروداکت‌جنریتور از چند دسته محصول آوردیم
+  // ⇒ نباید فیلتر ویژگی‌های این دسته را اعمال کنیم
   const activeFilters = Object.entries(selectedFilters.value).filter(([, values]) => values && values.length > 0);
   if (mixed || activeFilters.length === 0) {
     return list;
   }
 
-  // mixed = false ⇒ یعنی همهٔ نتایج از همان type اصلی هستند
-  // در این حالت، فیلتر ویژگی‌ها روی همین لیست اعمال می‌شود
+  // اینجا: سرچ + type و همه نتایج از همان type ⇒ می‌توانیم فیلتر ویژگی را اعمال کنیم
   return list.filter((product) => {
     if (!product.product_variants || product.product_variants.length === 0) return false;
 
@@ -289,7 +377,242 @@ const shownProducts = computed<Product[]>(() => {
   });
 });
 
-// تغییر تیک فیلترها
+// ---------- فیلتر قیمت (ورودی + اسلایدر + دکمه اعمال) ----------
+
+// نوع مرتب‌سازی
+const sortBy = ref<"newest" | "priceAsc" | "priceDesc" | null>("newest");
+
+// بازه قیمت انتخاب‌شده (برای اسلایدر و اینپوت‌ها)
+const priceRange = ref<[number, number]>([0, 0]);
+
+// بازه قیمتی که واقعا روی نتایج اعمال شده (فقط بعد از کلیک روی "اعمال")
+const appliedPriceRange = ref<[number, number] | null>(null);
+
+// محاسبه min/max قیمت بین محصولات فعلی (baseProducts)
+const priceStats = computed(() => {
+  const products = baseProducts.value;
+  let min = Number.POSITIVE_INFINITY;
+  let max = 0;
+
+  for (const p of products) {
+    if (!Array.isArray(p.product_variants)) continue;
+    for (const v of p.product_variants) {
+      const price = v.price;
+      if (typeof price !== "number") continue;
+      if (price < min) min = price;
+      if (price > max) max = price;
+    }
+  }
+
+  if (!Number.isFinite(min)) min = 0;
+  if (max < min) max = min;
+
+  return { min, max };
+});
+
+// هر بار که بازه قیمتی پایه عوض می‌شود ⇒ اگر هنوز چیزی اعمال نشده، اسلایدر را روی [0, max] تنظیم کن
+watch(
+  () => priceStats.value,
+  ({ max }) => {
+    if (max <= 0) {
+      priceRange.value = [0, 0];
+      return;
+    }
+
+    if (!appliedPriceRange.value) {
+      priceRange.value = [0, max];
+    } else {
+      let [aMin, aMax] = appliedPriceRange.value;
+      if (aMax > max) aMax = max;
+      if (aMin > aMax) aMin = 0;
+      appliedPriceRange.value = [aMin, aMax];
+      priceRange.value = [aMin, aMax];
+    }
+  },
+  { immediate: true }
+);
+
+// کمک برای تبدیل اعداد فارسی/کاما دار به عدد ساده
+const parsePriceInput = (val: string): number => {
+  if (!val) return 0;
+  const persianDigits = "۰۱۲۳۴۵۶۷۸۹";
+  let normalized = "";
+  for (const ch of val) {
+    const idx = persianDigits.indexOf(ch);
+    if (idx >= 0) {
+      normalized += String(idx);
+    } else if (/[0-9]/.test(ch)) {
+      normalized += ch;
+    }
+  }
+  const n = Number(normalized || "0");
+  return Number.isNaN(n) ? 0 : n;
+};
+
+// رشته‌ی نمایش برای اینپوت‌ها
+const minPriceInput = ref("");
+const maxPriceInput = ref("");
+
+// وقتی priceRange عوض می‌شود، اینپوت‌ها را با جداکننده سه‌تایی آپدیت کن
+watch(
+  () => priceRange.value,
+  ([min, max]) => {
+    minPriceInput.value = formatNumber(min);
+    maxPriceInput.value = formatNumber(max);
+  },
+  { immediate: true }
+);
+
+// تبدیل اعداد فارسی کیبورد به انگلیسی برای محاسبه
+const toEnglishDigit = (char: string) => {
+  const persianDigits = "۰۱۲۳۴۵۶۷۸۹";
+  const idx = persianDigits.indexOf(char);
+  return idx >= 0 ? String(idx) : char;
+};
+
+// اعتبارسنجی دقیق هنگام تایپ (دیوار + تبدیل به سقف)
+const validatePriceKeyPress = (e: KeyboardEvent, currentValStr: string, isMinInput: boolean) => {
+  const allowedKeys = ["Backspace", "Delete", "ArrowLeft", "ArrowRight", "Tab", "Home", "End"];
+  if (allowedKeys.includes(e.key)) return;
+
+  if (!/[0-9\u06F0-\u06F9]/.test(e.key)) {
+    e.preventDefault();
+    return;
+  }
+
+  const max = priceStats.value.max;
+  if (max <= 0) return;
+
+  const input = e.target as HTMLInputElement;
+  if (input.selectionStart !== input.selectionEnd) return;
+
+  const currentNum = parsePriceInput(currentValStr);
+  const newKey = toEnglishDigit(e.key);
+
+  const potentialNumber = Number(String(currentNum) + newKey);
+
+  if (potentialNumber > max) {
+    e.preventDefault();
+
+    if (currentNum < max) {
+      if (isMinInput) {
+        handleMinPriceInput(String(max));
+      } else {
+        handleMaxPriceInput(String(max));
+      }
+    }
+  }
+};
+
+// هندل تغییر اینپوت "از"
+const handleMinPriceInput = (val: string) => {
+  const maxBound = priceStats.value.max || 0;
+  let n = parsePriceInput(val);
+  if (n < 0) n = 0;
+  if (n > maxBound) n = maxBound;
+
+  const currentMax = priceRange.value[1];
+  let newMin = n;
+  let newMax = currentMax;
+
+  if (newMin > newMax) {
+    newMax = newMin;
+  }
+
+  if (newMin === priceRange.value[0] && newMax === priceRange.value[1]) {
+    minPriceInput.value = formatNumber(newMin);
+    return;
+  }
+
+  priceRange.value = [newMin, newMax];
+  minPriceInput.value = formatNumber(newMin);
+};
+
+// هندل تغییر اینپوت "تا"
+const handleMaxPriceInput = (val: string) => {
+  const maxBound = priceStats.value.max || 0;
+  let n = parsePriceInput(val);
+  if (n < 0) n = 0;
+  if (n > maxBound) n = maxBound;
+
+  const currentMin = priceRange.value[0];
+  let newMin = currentMin;
+  let newMax = n;
+
+  if (newMax < newMin) {
+    newMin = newMax;
+  }
+
+  if (newMin === priceRange.value[0] && newMax === priceRange.value[1]) {
+    maxPriceInput.value = formatNumber(newMax);
+    return;
+  }
+
+  priceRange.value = [newMin, newMax];
+  maxPriceInput.value = formatNumber(newMax);
+};
+
+// آیا دکمه اعمال محدوده قیمت فعال باشد؟
+const canApplyPriceFilter = computed(() => {
+  if (!priceStats.value.max || priceStats.value.max <= 0) return false;
+
+  const [curMin, curMax] = priceRange.value;
+  if (!appliedPriceRange.value && curMin === 0 && curMax === priceStats.value.max) return false;
+
+  if (appliedPriceRange.value && appliedPriceRange.value[0] === curMin && appliedPriceRange.value[1] === curMax) {
+    return false;
+  }
+
+  return true;
+});
+
+// دکمه "اعمال محدوده قیمت"
+const applyPriceFilter = () => {
+  const [minVal, maxVal] = priceRange.value;
+  if (minVal === 0 && maxVal === priceStats.value.max) {
+    appliedPriceRange.value = null;
+  } else {
+    appliedPriceRange.value = [minVal, maxVal];
+  }
+};
+
+// حذف فیلتر قیمت
+const clearPriceFilter = () => {
+  appliedPriceRange.value = null;
+  const max = priceStats.value.max || 0;
+  priceRange.value = [0, max];
+};
+
+// ---------- محصولات نهایی برای نمایش (پایه + فیلتر قیمت + مرتب‌سازی) ----------
+const shownProducts = computed<Product[]>(() => {
+  let list = baseProducts.value;
+
+  if (appliedPriceRange.value) {
+    const [minP, maxP] = appliedPriceRange.value;
+    list = list.filter((product) => {
+      if (!Array.isArray(product.product_variants) || product.product_variants.length === 0) return false;
+      return product.product_variants.some((v) => v.price >= minP && v.price <= maxP);
+    });
+  }
+
+  const arr = [...list];
+
+  if (sortBy.value === "priceAsc") {
+    arr.sort((a, b) => getProductMinPrice(a) - getProductMinPrice(b));
+  } else if (sortBy.value === "priceDesc") {
+    arr.sort((a, b) => getProductMinPrice(b) - getProductMinPrice(a));
+  } else if (sortBy.value === "newest") {
+    arr.sort((a, b) => {
+      const da = (a as any).created_at ? new Date((a as any).created_at).getTime() : 0;
+      const db = (b as any).created_at ? new Date((b as any).created_at).getTime() : 0;
+      return db - da;
+    });
+  }
+
+  return arr;
+});
+
+// ---------- تغییر تیک فیلترهای ویژگی ----------
 const toggleFilter = (attrName: string, value: string, checked: boolean) => {
   const current = selectedFilters.value[attrName] || [];
   if (checked) {
@@ -309,103 +632,184 @@ const toggleFilter = (attrName: string, value: string, checked: boolean) => {
     <div v-else-if="!productStore.products || productStore.products.length === 0" class="text-center text-gray-500">محصولی برای نمایش وجود ندارد.</div>
 
     <div v-else class="grid grid-cols-12 gap-5">
+      <!-- ستون فیلترها -->
       <div class="col-span-3">
-        <!-- حالت ویژه: نتایج چنددسته‌ای (پروداکت‌جنریتور مجبور شده از چند type استفاده کند) -->
-        <template v-if="hasMixedTypes">
-          <h2 class="text-2xl font-semibold mb-2">بدون فیلتر</h2>
-          <p class="mt-2 text-sm text-gray-500">نتایج جستجو برای «{{ searchQuery }}» در چند دسته‌بندی</p>
-        </template>
-
-        <!-- اگر type نداریم و فقط سرچ هست ⇒ بدون فیلتر (سرچ سراسری) -->
-        <template v-else-if="!currentType && hasSearch">
-          <h2 class="text-2xl font-semibold mb-2">بدون فیلتر</h2>
-          <p class="mt-2 text-sm text-gray-500">نتایج جستجو برای «{{ searchQuery }}»</p>
-        </template>
-
-        <!-- اگر type داریم ⇒ فیلترهای معمولی -->
-        <template v-else-if="currentType">
-          <h2 class="text-2xl font-semibold mb-4">فیلتر محصولات ({{ currentType.typename }})</h2>
-
-          <!-- هر ویژگی مربوط به این type -->
-          <div v-for="attr in currentType.attributes" :key="attr.id" class="mb-4 border-b pb-2">
-            <p class="font-semibold text-sm mb-2">{{ attr.name }}</p>
-
-            <div class="flex flex-col gap-1 max-h-40 overflow-y-auto">
-              <label v-for="opt in typeOptions[attr.id] || []" :key="opt" class="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  :value="opt"
-                  :checked="(selectedFilters[attr.name] || []).includes(opt)"
-                  @change="(e: any) => toggleFilter(attr.name, opt, e.target.checked)" />
-                <span>{{ opt }}</span>
-              </label>
+        <div class="flex items-center mb-6 gap-3">
+          <v-icon size="30px">mdi-tune</v-icon>
+          <p class="text-2xl font-semibold">فیلترها</p>
+        </div>
+        <div class="space-y-6 border-2 border-neutral-200 shadow-lg shadow-stone-200 rounded-lg !p-2 bg-neutral-50">
+          <!-- مرتب‌سازی (همیشه) -->
+          <div class="grid grid-cols-3 items-center gap-2 text-sm">
+            <div
+              class="flex justify-center items-center border-2 rounded-lg py-2 cursor-pointer transition-colors"
+              :class="sortBy === 'newest' ? 'bg-stone-600 text-white border-stone-600' : 'border-neutral-300 hover:bg-neutral-200'"
+              @click="sortBy = sortBy === 'newest' ? null : 'newest'">
+              جدیدترین
+            </div>
+            <div
+              class="flex justify-center items-center border-2 rounded-lg py-2 cursor-pointer transition-colors"
+              :class="sortBy === 'priceAsc' ? 'bg-stone-600 text-white border-stone-600' : 'border-neutral-300 hover:bg-neutral-200'"
+              @click="sortBy = sortBy === 'priceAsc' ? null : 'priceAsc'">
+              ارزان‌ترین
+            </div>
+            <div
+              class="flex justify-center items-center border-2 rounded-lg py-2 cursor-pointer transition-colors"
+              :class="sortBy === 'priceDesc' ? 'bg-stone-600 text-white border-stone-600' : 'border-neutral-300 hover:bg-neutral-200'"
+              @click="sortBy = sortBy === 'priceDesc' ? null : 'priceDesc'">
+              گران‌ترین
             </div>
           </div>
 
-          <!-- دکمه پاک کردن همه فیلترها -->
-          <button v-if="Object.values(selectedFilters).some((arr) => arr && arr.length > 0)" class="mt-2 text-xs text-blue-600 hover:underline" @click="selectedFilters = {}">
-            پاک کردن همه فیلترها
-          </button>
-        </template>
+          <!-- فیلتر بازه قیمت (همیشه) -->
+          <div class="mt-3">
+            <h2 class="text-base font-semibold mb-3">محدوده قیمت (تومان)</h2>
 
-        <!-- نه type هست، نه سرچ ⇒ پیام انتخاب دسته‌بندی -->
-        <template v-else>
-          <h2 class="text-2xl font-semibold mb-4">فیلتر محصولات</h2>
-          <div class="text-gray-500 text-sm">لطفاً یک دسته‌بندی از بالا انتخاب کنید.</div>
-        </template>
+            <div v-if="priceStats.max > 0" class="space-y-3">
+              <!-- دو فیلد "از" و "تا" -->
+              <div class="flex flex-col gap-2 text-xs">
+                <div class="flex items-center gap-2">
+                  <span class="w-6 text-gray-500">از</span>
+                  <v-text-field
+                    :model-value="minPriceInput"
+                    @update:model-value="handleMinPriceInput"
+                    @keypress="(e) => validatePriceKeyPress(e, minPriceInput, true)"
+                    variant="outlined"
+                    density="compact"
+                    hide-details
+                    class="flex-1" />
+                  <span class="w-10 text-gray-500 text-left">تومان</span>
+                </div>
+
+                <div class="flex items-center gap-2">
+                  <span class="w-6 text-gray-500">تا</span>
+                  <v-text-field
+                    :model-value="maxPriceInput"
+                    @update:model-value="handleMaxPriceInput"
+                    @keypress="(e) => validatePriceKeyPress(e, maxPriceInput, false)"
+                    variant="outlined"
+                    density="compact"
+                    hide-details
+                    class="flex-1" />
+                  <span class="w-10 text-gray-500 text-left">تومان</span>
+                </div>
+              </div>
+
+              <!-- اسلایدر بازه قیمت -->
+              <v-range-slider v-model="priceRange" :min="0" :max="priceStats.max" step="1000" class="mt-2" />
+
+              <!-- دکمه اعمال / حذف فیلتر قیمت -->
+              <div class="flex items-center gap-2 mt-2">
+                <v-btn color="primary" size="small" class="flex-1" :disabled="!canApplyPriceFilter" @click="applyPriceFilter"> اعمال محدوده قیمت </v-btn>
+                <v-btn v-if="appliedPriceRange" size="small" variant="text" @click="clearPriceFilter"> حذف </v-btn>
+              </div>
+            </div>
+
+            <div v-else class="text-xs text-gray-500">فیلتر قیمت برای این نتایج فعال نیست.</div>
+          </div>
+
+          <!-- جداکننده‌ی فیلترهای عمومی از فیلترهای دسته‌ای -->
+          <div class="border-t border-stone-200 pt-4">
+            <!-- حالت ویژه: نتایج چنددسته‌ای (پروداکت‌جنریتور مجبور شده از چند type استفاده کند) -->
+            <template v-if="hasMixedTypes">
+              <h2 class="text-2xl font-semibold mb-2">بدون فیلتر ویژگی</h2>
+              <p class="mt-2 text-sm text-gray-500">نتایج جستجو برای «{{ searchQuery }}» در چند دسته‌بندی</p>
+            </template>
+
+            <!-- اگر type نداریم و فقط سرچ هست ⇒ بدون فیلتر ویژگی -->
+            <template v-else-if="!currentType && hasSearch">
+              <h2 class="text-2xl font-semibold mb-2">بدون فیلتر ویژگی</h2>
+              <p class="mt-2 text-sm text-gray-500">نتایج جستجو برای «{{ searchQuery }}»</p>
+            </template>
+
+            <!-- اگر type داریم ⇒ فیلترهای ویژگی معمولی -->
+            <template v-else-if="currentType">
+              <h2 class="text-2xl font-semibold mb-4">فیلتر بر اساس ویژگی‌ها ({{ currentType.typename }})</h2>
+
+              <!-- هر ویژگی مربوط به این type -->
+              <div v-for="attr in currentType.attributes" :key="attr.id" class="mb-4 border-b pb-2">
+                <p class="font-semibold text-sm mb-2">{{ attr.name }}</p>
+
+                <div class="flex flex-col gap-1 max-h-40 overflow-y-auto">
+                  <label v-for="opt in typeOptions[attr.id] || []" :key="opt" class="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      :value="opt"
+                      :checked="(selectedFilters[attr.name] || []).includes(opt)"
+                      @change="(e: any) => toggleFilter(attr.name, opt, e.target.checked)" />
+                    <span>{{ opt }}</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- دکمه پاک کردن همه فیلترهای ویژگی -->
+              <button v-if="Object.values(selectedFilters).some((arr) => arr && arr.length > 0)" class="mt-2 text-xs text-blue-600 hover:underline" @click="selectedFilters = {}">
+                پاک کردن همه فیلترهای ویژگی
+              </button>
+            </template>
+
+            <!-- نه type هست، نه سرچ ⇒ پیام انتخاب دسته‌بندی -->
+            <template v-else>
+              <h2 class="text-2xl font-semibold mb-4">فیلتر محصولات</h2>
+              <div class="text-gray-500 text-sm">لطفاً یک دسته‌بندی از بالا انتخاب کنید.</div>
+            </template>
+          </div>
+        </div>
       </div>
 
       <!-- ستون محصولات -->
-      <div class="col-span-9 grid grid-cols-12 gap-4">
-        <h1 class="text-3xl font-bold mb-6 col-span-full">
-          {{ hasSearch ? "نتایج جستجو" : "لیست محصولات" }}
-          <span v-if="currentType"> ({{ currentType.typename }})</span>
-        </h1>
+      <div class="col-span-9">
+        <div class="grid grid-cols-12 gap-4">
+          <h1 class="text-3xl font-bold mb-2 col-span-full">
+            {{ hasSearch ? "نتایج جستجو" : "لیست محصولات" }}
+            <span v-if="currentType"> ({{ currentType.typename }})</span>
+          </h1>
 
-        <div v-if="shownProducts.length === 0" class="col-span-full text-gray-500">
-          {{ hasSearch ? "محصولی مطابق جستجو یافت نشد." : "محصولی با این فیلترها پیدا نشد." }}
-        </div>
-
-        <NuxtLink
-          v-else
-          v-for="product in shownProducts"
-          :key="product.id"
-          :to="`/products/${product.id}`"
-          class="border col-span-4 rounded-lg shadow-lg flex flex-col no-underline text-current hover:shadow-xl transition-shadow duration-200">
-          <div class="h-[35vh]">
-            <v-carousel
-              v-if="product.image_urls && product.image_urls.length > 0"
-              height="100%"
-              :show-arrows="product.image_urls.length > 1 ? 'hover' : false"
-              hide-delimiters
-              cycle
-              class="rounded-t-lg">
-              <v-carousel-item v-for="(imageUrl, i) in product.image_urls" :key="i" :src="imageUrl" cover></v-carousel-item>
-            </v-carousel>
-            <div v-else class="w-full h-full bg-gray-200 flex items-center justify-center rounded-t-lg">
-              <span class="text-gray-400">بدون تصویر</span>
-            </div>
+          <div v-if="shownProducts.length === 0" class="col-span-full text-gray-500">
+            {{ hasSearch ? "محصولی مطابق جستجو یافت نشد." : "محصولی با این فیلترها پیدا نشد." }}
           </div>
 
-          <div class="!p-4 flex flex-col flex-grow">
-            <h2 class="text-xl font-semibold mb-2 truncate">
-              {{ product.title }}
-            </h2>
-            <!-- دسته‌بندی محصول -->
-            <p class="text-xs text-gray-500 mb-2">
-              دسته‌بندی:
-              <span class="font-medium">
-                {{ getTypeName(product) }}
-              </span>
-            </p>
-            <div class="flex-grow"></div>
-            <div class="flex justify-between items-center mt-4">
-              <p class="text-lg font-bold text-green-600">
-                {{ getPriceRange(product) }}
+          <NuxtLink
+            v-else
+            v-for="product in shownProducts"
+            :key="product.id"
+            :to="`/products/${product.id}`"
+            class="border col-span-4 rounded-lg shadow-lg flex flex-col no-underline text-current hover:shadow-xl transition-shadow duration-200">
+            <div class="h-[35vh]">
+              <v-carousel
+                v-if="product.image_urls && product.image_urls.length > 0"
+                height="100%"
+                :show-arrows="product.image_urls.length > 1 ? 'hover' : false"
+                hide-delimiters
+                cycle
+                class="rounded-t-lg">
+                <v-carousel-item v-for="(imageUrl, i) in product.image_urls" :key="i" :src="imageUrl" cover></v-carousel-item>
+              </v-carousel>
+              <div v-else class="w-full h-full bg-gray-200 flex items-center justify-center rounded-t-lg">
+                <span class="text-gray-400">بدون تصویر</span>
+              </div>
+            </div>
+
+            <div class="!p-4 flex flex-col flex-grow">
+              <h2 class="text-xl font-semibold mb-2 truncate">
+                {{ product.title }}
+              </h2>
+              <!-- دسته‌بندی محصول -->
+              <p class="text-xs text-gray-500 mb-2">
+                دسته‌بندی:
+                <span class="font-medium">
+                  {{ getTypeName(product) }}
+                </span>
               </p>
+              <div class="flex-grow"></div>
+              <div class="flex justify-between items-center mt-4">
+                <p class="text-lg font-bold text-green-600">
+                  {{ getPriceRange(product) }}
+                </p>
+              </div>
             </div>
-          </div>
-        </NuxtLink>
+          </NuxtLink>
+        </div>
       </div>
     </div>
   </div>

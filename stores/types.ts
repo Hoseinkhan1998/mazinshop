@@ -15,21 +15,62 @@ export interface ProductType {
 export const useTypesStore = defineStore("types", {
   state: () => ({
     types: [] as ProductType[],
+    typesLastFetchedAt: null as number | null,
+    typesCacheHydrated: false,
   }),
   actions: {
     // ۱. واکشی انواع با استفاده از تابع سفارشی دیتابیس (RPC)
     async fetchTypes(force: boolean = false) {
-      if (!force && this.types.length > 0) return;
-
       const { $supabase } = useNuxtApp();
-      try {
-        const { data, error } = await $supabase.rpc("get_types_with_details");
-        if (error) throw error;
-        // خروجی تابع RPC ممکن است null باشد، آن را به آرایه خالی تبدیل می‌کنیم
-        this.types = data || [];
-      } catch (error) {
-        console.error("Error fetching types:", error);
+      const CACHE_KEY = "mazin_types_cache_v1";
+      const CACHE_TTL = 1000 * 60 * 60; // مثلا ۱ ساعت – چون ساختار دسته‌ها خیلی کم عوض میشه
+      const now = Date.now();
+
+      // ۱) هیدرات از localStorage (فقط یک‌بار و فقط کلاینت)
+      if (import.meta.client && !this.typesCacheHydrated) {
+        this.typesCacheHydrated = true;
+        try {
+          const raw = localStorage.getItem(CACHE_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed.data)) {
+              this.types = parsed.data;
+              this.typesLastFetchedAt = parsed.ts || null;
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to read types cache:", e);
+          localStorage.removeItem(CACHE_KEY);
+        }
       }
+
+      const hasFreshEnough = !force && this.types.length > 0 && this.typesLastFetchedAt !== null && now - this.typesLastFetchedAt < CACHE_TTL;
+
+      const fetchFromNetwork = async () => {
+        try {
+          const { data, error } = await $supabase.rpc("get_types_with_details");
+          if (error) throw error;
+          this.types = data || [];
+          this.typesLastFetchedAt = Date.now();
+
+          if (import.meta.client) {
+            try {
+              localStorage.setItem(CACHE_KEY, JSON.stringify({ data: this.types, ts: this.typesLastFetchedAt }));
+            } catch (e) {
+              console.warn("Failed to write types cache:", e);
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching types:", error);
+        }
+      };
+
+      if (hasFreshEnough && !force) {
+        fetchFromNetwork().catch((err) => console.error("Background fetchTypes error:", err));
+        return;
+      }
+
+      await fetchFromNetwork();
     },
 
     // ۲. افزودن یک نوع جدید به همراه ویژگی‌های متصل به آن
