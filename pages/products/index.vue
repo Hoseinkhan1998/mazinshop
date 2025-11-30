@@ -718,23 +718,26 @@ const toggleFilter = (attrName: string, value: string, checked: boolean) => {
               <p class="text-lg font-semibold mb-4">فیلترهای دسته بندی {{ currentType.typename }}</p>
 
               <!-- هر ویژگی مربوط به این type -->
-              <div v-for="attr in currentType.attributes" :key="attr.id" class="mb-4 pb-2 max-h-52 overflow-y-auto">
-                <p class="font-semibold text-sm pb-2 sticky top-0 z-30 bg-neutral-50">{{ attr.name }}</p>
-                <div class="flex flex-col gap-1">
-                  <label v-for="opt in typeOptions[attr.id] || []" :key="opt" class="flex items-center gap-2 text-sm cursor-pointer">
-                    <input
-                      type="checkbox"
-                      :value="opt"
-                      :checked="(selectedFilters[attr.name] || []).includes(opt)"
-                      @change="(e: any) => toggleFilter(attr.name, opt, e.target.checked)" />
-                    <span>{{ opt }}</span>
-                  </label>
+              <div v-for="attr in currentType.attributes" :key="attr.id" class="collapse bg-base-100 border-base-300 border mb-2">
+                <input type="checkbox" />
+                <div class="collapse-title font-semibold text-sm">{{ attr.name }}</div>
+                <div class="collapse-content max-h-52 overflow-y-auto">
+                  <div class="flex flex-col gap-1">
+                    <label v-for="opt in typeOptions[attr.id] || []" :key="opt" class="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        :value="opt"
+                        :checked="(selectedFilters[attr.name] || []).includes(opt)"
+                        @change="(e: any) => toggleFilter(attr.name, opt, e.target.checked)" />
+                      <span>{{ opt }}</span>
+                    </label>
+                  </div>
                 </div>
               </div>
 
               <!-- دکمه پاک کردن همه فیلترهای ویژگی -->
-              <div class=" flex justify-center items-center border-2 border-neutral-300 rounded-lg hover:bg-red-100">
-                <button v-if="Object.values(selectedFilters).some((arr) => arr && arr.length > 0)" class="text-sm" @click="selectedFilters = {}">پاک کردن تمام فیلتر ها</button>
+              <div v-if="Object.values(selectedFilters).some((arr) => arr && arr.length > 0)" class=" flex justify-center transition-all duration-200 items-center border-2 border-neutral-300 rounded-lg hover:bg-neutral-300">
+                <button class="text-sm" @click="selectedFilters = {}">پاک کردن تمام فیلتر ها</button>
               </div>
             </template>
           </div>
