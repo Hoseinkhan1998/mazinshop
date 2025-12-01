@@ -9,6 +9,7 @@ const productStore = useProductStore();
 const typesStore = useTypesStore();
 const route = useRoute();
 const router = useRouter();
+const openPanels = ref([]);
 
 const loading = ref(true);
 
@@ -611,7 +612,7 @@ const toggleFilter = (attrName: string, value: string, checked: boolean) => {
 
     <div v-else class="grid grid-cols-12 gap-5 relative">
       <!-- ستون فیلترها -->
-      <div class="col-span-3 sticky top-36 self-start">
+      <div class="col-span-3 !sticky !top-36 !self-start">
         <div class="flex items-center mb-6 gap-3">
           <v-icon size="30px">mdi-tune</v-icon>
           <p class="text-2xl font-semibold">فیلترها</p>
@@ -714,29 +715,37 @@ const toggleFilter = (attrName: string, value: string, checked: boolean) => {
           <div class="pt-4">
             <!-- اگر type داریم ⇒ فیلترهای ویژگی معمولی -->
             <template v-if="currentType && !hasMixedTypes && !hasSearch">
-              <!-- <p class="text-lg font-semibold mb-4">فیلتر بر اساس ویژگی‌ها ({{ currentType.typename }})</p> -->
               <p class="text-lg font-semibold mb-4">فیلترهای دسته بندی {{ currentType.typename }}</p>
 
               <!-- هر ویژگی مربوط به این type -->
-              <div v-for="attr in currentType.attributes" :key="attr.id" class="collapse bg-base-100 border-base-300 border mb-2">
-                <input type="checkbox" />
-                <div class="collapse-title font-semibold text-sm">{{ attr.name }}</div>
-                <div class="collapse-content max-h-52 overflow-y-auto">
-                  <div class="flex flex-col gap-1">
-                    <label v-for="opt in typeOptions[attr.id] || []" :key="opt" class="flex items-center gap-2 text-sm cursor-pointer">
-                      <input
-                        type="checkbox"
-                        :value="opt"
-                        :checked="(selectedFilters[attr.name] || []).includes(opt)"
-                        @change="(e: any) => toggleFilter(attr.name, opt, e.target.checked)" />
-                      <span>{{ opt }}</span>
-                    </label>
-                  </div>
-                </div>
-              </div>
+              <div>
+                <v-expansion-panels v-model="openPanels" multiple>
+                  <v-expansion-panel v-for="attr in currentType.attributes" :key="attr.id">
+                    <v-expansion-panel-title class=" !text-lg !font-semibold">
+                      {{ attr.name }}
+                    </v-expansion-panel-title>
 
+                    <v-expansion-panel-text>
+                      <!-- فقط این div محدود + اسکرول‌دار میشه -->
+                      <div class="attr-scroll">
+                        <label v-for="opt in typeOptions[attr.id] || []" :key="opt" class="flex cursor-pointer text-sm items-center my-1">
+                          <input
+                            type="checkbox"
+                            :value="opt"
+                            class="checkbox me-2 !border-2 !p-[2px] !border-neutral-300 rounded-lg bg-indigo-500 checked:border-orange-500 checked:bg-orange-400 checked:text-orange-800"
+                            :checked="(selectedFilters[attr.name] || []).includes(opt)"
+                            @change="(e: any) => toggleFilter(attr.name, opt, e.target.checked)" />
+                          <span>{{ opt }}</span>
+                        </label>
+                      </div>
+                    </v-expansion-panel-text>
+                  </v-expansion-panel>
+                </v-expansion-panels>
+              </div>
               <!-- دکمه پاک کردن همه فیلترهای ویژگی -->
-              <div v-if="Object.values(selectedFilters).some((arr) => arr && arr.length > 0)" class=" flex justify-center transition-all duration-200 items-center border-2 border-neutral-300 rounded-lg hover:bg-neutral-300">
+              <div
+                v-if="Object.values(selectedFilters).some((arr) => arr && arr.length > 0)"
+                class="flex justify-center transition-all duration-200 items-center border-2 border-dashed mt-3 border-neutral-300 rounded-lg hover:bg-neutral-300">
                 <button class="text-sm" @click="selectedFilters = {}">پاک کردن تمام فیلتر ها</button>
               </div>
             </template>
@@ -801,3 +810,11 @@ const toggleFilter = (attrName: string, value: string, checked: boolean) => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.attr-scroll {
+  max-height: 200px;
+  overflow-y: auto;
+  padding-inline-end: 8px;
+}
+</style>
