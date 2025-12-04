@@ -602,6 +602,57 @@ const toggleFilter = (attrName: string, value: string, checked: boolean) => {
     selectedFilters.value[attrName] = current.filter((v) => v !== value);
   }
 };
+
+// ---------- Smart Sticky Sidebar Logic ----------
+const sidebarRef = ref<HTMLElement | null>(null);
+const sidebarTop = ref(144); // مقدار اولیه (معادل top-36 یا 9rem)
+let lastScrollY = 0;
+
+const handleScroll = () => {
+  const sidebarEl = sidebarRef.value;
+  if (!sidebarEl) return;
+
+  const currentScrollY = window.scrollY;
+  const sidebarHeight = sidebarEl.offsetHeight;
+  const windowHeight = window.innerHeight;
+  
+  // تنظیمات فاصله
+  const headerOffset = 144; // فاصله از سقف (همان top-36)
+  const bottomPadding = 20; // فاصله از کف وقتی می‌چسبد
+
+  if (sidebarHeight < windowHeight - headerOffset) {
+    sidebarTop.value = headerOffset;
+    lastScrollY = currentScrollY;
+    return;
+  }
+
+  // محاسبه جهت و مقدار اسکرول
+  const delta = currentScrollY - lastScrollY;
+  let newTop = sidebarTop.value - delta;
+  const maxTop = headerOffset;
+  const minTop = windowHeight - sidebarHeight - bottomPadding;
+  if (newTop > maxTop) newTop = maxTop;
+  if (newTop < minTop) newTop = minTop;
+
+  sidebarTop.value = newTop;
+  lastScrollY = currentScrollY;
+};
+
+// اضافه کردن لیسنر اسکرول
+onMounted(() => {
+  if (typeof window !== 'undefined') {
+    lastScrollY = window.scrollY;
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleScroll); // برای تغییر سایز صفحه
+  }
+});
+
+onUnmounted(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('scroll', handleScroll);
+    window.removeEventListener('resize', handleScroll);
+  }
+});
 </script>
 
 <template>
@@ -612,14 +663,15 @@ const toggleFilter = (attrName: string, value: string, checked: boolean) => {
 
     <div v-else class="grid grid-cols-12 gap-5 relative">
       <!-- ستون فیلترها -->
-      <div class="col-span-3 !sticky !top-36 !self-start">
-        <div class="flex items-center mb-6 gap-3">
-          <v-icon size="30px">mdi-tune</v-icon>
-          <p class="text-2xl font-semibold">فیلترها</p>
-        </div>
-        <div class="space-y-6 border-2 border-neutral-200 shadow-lg shadow-stone-200 rounded-lg !p-2 bg-neutral-50">
-          <!-- مرتب‌سازی (همیشه) -->
-          <div class="grid grid-cols-3 items-center gap-2 text-sm">
+      <div class="col-span-3">
+        <div ref="sidebarRef" class="sticky transition-all duration-75 ease-linear" :style="{ top: sidebarTop + 'px' }">
+          <div class="flex items-center mb-6 gap-3">
+            <v-icon size="30px">mdi-tune</v-icon>
+            <p class="text-2xl font-semibold">فیلترها</p>
+          </div>
+          <div class="space-y-6 border-2 border-neutral-200 shadow-lg shadow-stone-200 rounded-lg !p-2 bg-neutral-50">
+            <!-- مرتب‌سازی (همیشه) -->
+            <div class="grid grid-cols-3 items-center gap-2 text-sm">
             <!-- جدیدترین: فقط toggle -->
             <div
               class="flex justify-center items-center border-2 rounded-lg py-2 cursor-pointer transition-colors"
@@ -750,11 +802,12 @@ const toggleFilter = (attrName: string, value: string, checked: boolean) => {
               </div>
             </template>
           </div>
+          </div>
         </div>
       </div>
 
       <!-- ستون محصولات -->
-      <div class="col-span-9">
+      <div class="col-span-9 h-[10000px]">
         <div class="grid grid-cols-12 gap-4">
           <h1 class="text-3xl font-bold mb-2 col-span-full">
             {{ hasSearch ? "نتایج جستجو" : "لیست محصولات" }}
