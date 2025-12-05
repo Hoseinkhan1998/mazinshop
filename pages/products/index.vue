@@ -113,23 +113,19 @@ const getTypeName = (product: Product) => {
 
 // تابع برای محاسبه و نمایش بازه قیمتی در کارت محصول
 const getPriceRange = (product: Product): string => {
-  if (!Array.isArray(product.product_variants) || product.product_variants.length === 0) {
-    return "ناموجود";
-  }
+  if (!Array.isArray(product.product_variants) || product.product_variants.length === 0) return "ناموجود";
 
-  if (product.product_variants.length === 1) {
-    return `${formatNumber(product.product_variants[0].price)} تومان`;
-  }
+  const prices = product.product_variants.map((v) => v.price).filter((p) => typeof p === "number");
+  if (prices.length === 0) return "ناموجود";
 
-  const prices = product.product_variants.map((v) => v.price);
   const minPrice = Math.min(...prices);
   const maxPrice = Math.max(...prices);
 
   if (minPrice === maxPrice) {
     return `${formatNumber(minPrice)} تومان`;
   }
-
-  return `از ${formatNumber(minPrice)} تا ${formatNumber(maxPrice)} تومان`;
+  // طبق درخواست جدید، همیشه فقط کمترین قیمت را با پیشوند "از" نمایش می‌دهیم
+  return `${formatNumber(minPrice)} تومان`;
 };
 
 // کمترین قیمت یک محصول (برای مرتب‌سازی و فیلتر)
@@ -615,7 +611,7 @@ const handleScroll = () => {
   const currentScrollY = window.scrollY;
   const sidebarHeight = sidebarEl.offsetHeight;
   const windowHeight = window.innerHeight;
-  
+
   // تنظیمات فاصله
   const headerOffset = 144; // فاصله از سقف (همان top-36)
   const bottomPadding = 20; // فاصله از کف وقتی می‌چسبد
@@ -640,17 +636,17 @@ const handleScroll = () => {
 
 // اضافه کردن لیسنر اسکرول
 onMounted(() => {
-  if (typeof window !== 'undefined') {
+  if (typeof window !== "undefined") {
     lastScrollY = window.scrollY;
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    window.addEventListener('resize', handleScroll); // برای تغییر سایز صفحه
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleScroll); // برای تغییر سایز صفحه
   }
 });
 
 onUnmounted(() => {
-  if (typeof window !== 'undefined') {
-    window.removeEventListener('scroll', handleScroll);
-    window.removeEventListener('resize', handleScroll);
+  if (typeof window !== "undefined") {
+    window.removeEventListener("scroll", handleScroll);
+    window.removeEventListener("resize", handleScroll);
   }
 });
 </script>
@@ -672,142 +668,142 @@ onUnmounted(() => {
           <div class="space-y-6 border-2 border-neutral-200 shadow-lg shadow-stone-200 rounded-lg !p-2 bg-neutral-50">
             <!-- مرتب‌سازی (همیشه) -->
             <div class="grid grid-cols-3 items-center gap-2 text-sm">
-            <!-- جدیدترین: فقط toggle -->
-            <div
-              class="flex justify-center items-center border-2 rounded-lg py-2 cursor-pointer transition-colors"
-              :class="sortBy === 'newest' ? 'bg-stone-600 text-white border-stone-600' : 'border-neutral-300 hover:bg-neutral-200'"
-              @click="sortBy = sortBy === 'newest' ? null : 'newest'">
-              جدیدترین
-            </div>
-
-            <!-- ارزان‌ترین: مثل رادیو، همیشه اینو فعال می‌کنه -->
-            <div
-              class="flex justify-center items-center border-2 rounded-lg py-2 cursor-pointer transition-colors"
-              :class="sortBy === 'priceAsc' ? 'bg-stone-600 text-white border-stone-600' : 'border-neutral-300 hover:bg-neutral-200'"
-              @click="sortBy = sortBy === 'priceAsc' ? null : 'priceAsc'">
-              ارزان‌ترین
-            </div>
-
-            <!-- گران‌ترین: مثل رادیو، همیشه اینو فعال می‌کنه -->
-            <div
-              class="flex justify-center items-center border-2 rounded-lg py-2 cursor-pointer transition-colors"
-              :class="sortBy === 'priceDesc' ? 'bg-stone-600 text-white border-stone-600' : 'border-neutral-300 hover:bg-neutral-200'"
-              @click="sortBy = sortBy === 'priceDesc' ? null : 'priceDesc'">
-              گران‌ترین
-            </div>
-          </div>
-
-          <!-- فیلتر بازه قیمت (همیشه) -->
-          <div class="mt-3">
-            <h2 class="text-base font-semibold mb-3">محدوده قیمت (تومان)</h2>
-
-            <div v-if="priceStats.max > 0" class="space-y-3 px-3">
-              <!-- دو فیلد "از" و "تا" -->
-              <div class="flex flex-col gap-2 text-xs">
-                <div class="flex items-center gap-2">
-                  <v-text-field
-                    :model-value="minPriceInput"
-                    @update:model-value="handleMinPriceInput"
-                    append-inner="sadsd"
-                    @keypress="(e) => validatePriceKeyPress(e, minPriceInput, true)"
-                    variant="outlined"
-                    density="compact"
-                    hide-details
-                    rounded="lg"
-                    class="">
-                    <template v-slot:append-inner>
-                      <p class="text-black text-xs">تومان</p>
-                    </template>
-                    <template v-slot:prepend-inner>
-                      <p class="text-black pe-3 text-xs">از</p>
-                    </template>
-                  </v-text-field>
-                </div>
-
-                <div class="flex items-center gap-2">
-                  <v-text-field
-                    :model-value="maxPriceInput"
-                    @update:model-value="handleMaxPriceInput"
-                    @keypress="(e) => validatePriceKeyPress(e, maxPriceInput, false)"
-                    variant="outlined"
-                    density="compact"
-                    hide-details
-                    rounded="lg"
-                    class="">
-                    <template v-slot:append-inner>
-                      <p class="text-black text-xs">تومان</p>
-                    </template>
-                    <template v-slot:prepend-inner>
-                      <p class="text-black pe-3 text-xs">تا</p>
-                    </template>
-                  </v-text-field>
-                </div>
-              </div>
-
-              <!-- اسلایدر بازه قیمت -->
-              <v-range-slider v-model="priceRange" :min="0" :max="priceStats.max" step="1000" class="mt-2" />
-              <div class="!flex justify-between w-full !-mt-5 text-xs items-center">
-                <p class="!-ms-3">ارزان‌ترین</p>
-                <p class="!-me-3">گران‌ترین</p>
-              </div>
-
-              <!-- دکمه اعمال / حذف فیلتر قیمت -->
-              <div class="flex items-center gap-2 mt-2">
-                <v-btn color="primary" size="small" class="flex-1" :disabled="!canApplyPriceFilter" @click="applyPriceFilter"> اعمال محدوده قیمت </v-btn>
-                <button v-if="appliedPriceRange" @click="clearPriceFilter">
-                  <v-icon class="text-red-600 !text-2xl">mdi-close-circle</v-icon>
-                  <v-tooltip class="!text-xs" activator="parent" location="bottom"><p class="text-xs">پاک کردن فیلتر قیمت</p></v-tooltip>
-                </button>
-              </div>
-            </div>
-
-            <div v-else class="text-xs text-gray-500">فیلتر قیمت برای این نتایج فعال نیست.</div>
-          </div>
-
-          <div class="pt-4">
-            <!-- اگر type داریم ⇒ فیلترهای ویژگی معمولی -->
-            <template v-if="currentType && !hasMixedTypes && !hasSearch">
-              <p class="text-lg font-semibold mb-4">فیلترهای دسته بندی {{ currentType.typename }}</p>
-
-              <!-- هر ویژگی مربوط به این type -->
-              <div>
-                <v-expansion-panels v-model="openPanels" multiple>
-                  <v-expansion-panel v-for="attr in currentType.attributes" :key="attr.id">
-                    <v-expansion-panel-title class=" !text-lg !font-semibold">
-                      {{ attr.name }}
-                    </v-expansion-panel-title>
-
-                    <v-expansion-panel-text>
-                      <!-- فقط این div محدود + اسکرول‌دار میشه -->
-                      <div class="attr-scroll">
-                        <label v-for="opt in typeOptions[attr.id] || []" :key="opt" class="flex cursor-pointer text-sm items-center my-1">
-                          <input
-                            type="checkbox"
-                            :value="opt"
-                            class="checkbox me-2 !border-2 !p-[2px] !border-neutral-300 rounded-lg bg-indigo-500 checked:border-orange-500 checked:bg-orange-400 checked:text-orange-800"
-                            :checked="(selectedFilters[attr.name] || []).includes(opt)"
-                            @change="(e: any) => toggleFilter(attr.name, opt, e.target.checked)" />
-                          <span>{{ opt }}</span>
-                        </label>
-                      </div>
-                    </v-expansion-panel-text>
-                  </v-expansion-panel>
-                </v-expansion-panels>
-              </div>
-              <!-- دکمه پاک کردن همه فیلترهای ویژگی -->
+              <!-- جدیدترین: فقط toggle -->
               <div
-                v-if="Object.values(selectedFilters).some((arr) => arr && arr.length > 0)"
-                class="flex justify-center transition-all duration-200 items-center border-2 border-dashed mt-3 border-neutral-300 rounded-lg hover:bg-neutral-300">
-                <button class="text-sm" @click="selectedFilters = {}">پاک کردن تمام فیلتر ها</button>
+                class="flex justify-center items-center border-2 rounded-lg py-2 cursor-pointer transition-colors"
+                :class="sortBy === 'newest' ? 'bg-stone-600 text-white border-stone-600' : 'border-neutral-300 hover:bg-neutral-200'"
+                @click="sortBy = sortBy === 'newest' ? null : 'newest'">
+                جدیدترین
               </div>
-            </template>
-          </div>
+
+              <!-- ارزان‌ترین: مثل رادیو، همیشه اینو فعال می‌کنه -->
+              <div
+                class="flex justify-center items-center border-2 rounded-lg py-2 cursor-pointer transition-colors"
+                :class="sortBy === 'priceAsc' ? 'bg-stone-600 text-white border-stone-600' : 'border-neutral-300 hover:bg-neutral-200'"
+                @click="sortBy = sortBy === 'priceAsc' ? null : 'priceAsc'">
+                ارزان‌ترین
+              </div>
+
+              <!-- گران‌ترین: مثل رادیو، همیشه اینو فعال می‌کنه -->
+              <div
+                class="flex justify-center items-center border-2 rounded-lg py-2 cursor-pointer transition-colors"
+                :class="sortBy === 'priceDesc' ? 'bg-stone-600 text-white border-stone-600' : 'border-neutral-300 hover:bg-neutral-200'"
+                @click="sortBy = sortBy === 'priceDesc' ? null : 'priceDesc'">
+                گران‌ترین
+              </div>
+            </div>
+
+            <!-- فیلتر بازه قیمت (همیشه) -->
+            <div class="mt-3">
+              <h2 class="text-base font-semibold mb-3">محدوده قیمت (تومان)</h2>
+
+              <div v-if="priceStats.max > 0" class="space-y-3 px-3">
+                <!-- دو فیلد "از" و "تا" -->
+                <div class="flex flex-col gap-2 text-xs">
+                  <div class="flex items-center gap-2">
+                    <v-text-field
+                      :model-value="minPriceInput"
+                      @update:model-value="handleMinPriceInput"
+                      append-inner="sadsd"
+                      @keypress="(e) => validatePriceKeyPress(e, minPriceInput, true)"
+                      variant="outlined"
+                      density="compact"
+                      hide-details
+                      rounded="lg"
+                      class="">
+                      <template v-slot:append-inner>
+                        <p class="text-black text-xs">تومان</p>
+                      </template>
+                      <template v-slot:prepend-inner>
+                        <p class="text-black pe-3 text-xs">از</p>
+                      </template>
+                    </v-text-field>
+                  </div>
+
+                  <div class="flex items-center gap-2">
+                    <v-text-field
+                      :model-value="maxPriceInput"
+                      @update:model-value="handleMaxPriceInput"
+                      @keypress="(e) => validatePriceKeyPress(e, maxPriceInput, false)"
+                      variant="outlined"
+                      density="compact"
+                      hide-details
+                      rounded="lg"
+                      class="">
+                      <template v-slot:append-inner>
+                        <p class="text-black text-xs">تومان</p>
+                      </template>
+                      <template v-slot:prepend-inner>
+                        <p class="text-black pe-3 text-xs">تا</p>
+                      </template>
+                    </v-text-field>
+                  </div>
+                </div>
+
+                <!-- اسلایدر بازه قیمت -->
+                <v-range-slider v-model="priceRange" :min="0" :max="priceStats.max" step="1000" class="mt-2" />
+                <div class="!flex justify-between w-full !-mt-5 text-xs items-center">
+                  <p class="!-ms-3">ارزان‌ترین</p>
+                  <p class="!-me-3">گران‌ترین</p>
+                </div>
+
+                <!-- دکمه اعمال / حذف فیلتر قیمت -->
+                <div class="flex items-center gap-2 mt-2">
+                  <v-btn color="primary" size="small" class="flex-1" :disabled="!canApplyPriceFilter" @click="applyPriceFilter"> اعمال محدوده قیمت </v-btn>
+                  <button v-if="appliedPriceRange" @click="clearPriceFilter">
+                    <v-icon class="text-red-600 !text-2xl">mdi-close-circle</v-icon>
+                    <v-tooltip class="!text-xs" activator="parent" location="bottom"><p class="text-xs">پاک کردن فیلتر قیمت</p></v-tooltip>
+                  </button>
+                </div>
+              </div>
+
+              <div v-else class="text-xs text-gray-500">فیلتر قیمت برای این نتایج فعال نیست.</div>
+            </div>
+
+            <div class="pt-4">
+              <!-- اگر type داریم ⇒ فیلترهای ویژگی معمولی -->
+              <template v-if="currentType && !hasMixedTypes && !hasSearch">
+                <p class="text-lg font-semibold mb-4">فیلترهای دسته بندی {{ currentType.typename }}</p>
+
+                <!-- هر ویژگی مربوط به این type -->
+                <div>
+                  <v-expansion-panels v-model="openPanels" multiple>
+                    <v-expansion-panel v-for="attr in currentType.attributes" :key="attr.id">
+                      <v-expansion-panel-title class="!text-lg !font-semibold">
+                        {{ attr.name }}
+                      </v-expansion-panel-title>
+
+                      <v-expansion-panel-text>
+                        <!-- فقط این div محدود + اسکرول‌دار میشه -->
+                        <div class="attr-scroll">
+                          <label v-for="opt in typeOptions[attr.id] || []" :key="opt" class="flex cursor-pointer text-sm items-center my-1">
+                            <input
+                              type="checkbox"
+                              :value="opt"
+                              class="checkbox me-2 !border-2 !p-[2px] !border-neutral-300 rounded-lg bg-indigo-500 checked:border-orange-500 checked:bg-orange-400 checked:text-orange-800"
+                              :checked="(selectedFilters[attr.name] || []).includes(opt)"
+                              @change="(e: any) => toggleFilter(attr.name, opt, e.target.checked)" />
+                            <span>{{ opt }}</span>
+                          </label>
+                        </div>
+                      </v-expansion-panel-text>
+                    </v-expansion-panel>
+                  </v-expansion-panels>
+                </div>
+                <!-- دکمه پاک کردن همه فیلترهای ویژگی -->
+                <div
+                  v-if="Object.values(selectedFilters).some((arr) => arr && arr.length > 0)"
+                  class="flex justify-center transition-all duration-200 items-center border-2 border-dashed mt-3 border-neutral-300 rounded-lg hover:bg-neutral-300">
+                  <button class="text-sm" @click="selectedFilters = {}">پاک کردن تمام فیلتر ها</button>
+                </div>
+              </template>
+            </div>
           </div>
         </div>
       </div>
 
       <!-- ستون محصولات -->
-      <div class="col-span-9 h-[10000px]">
+      <div class="col-span-9">
         <div class="grid grid-cols-12 gap-4">
           <h1 class="text-3xl font-bold mb-2 col-span-full">
             {{ hasSearch ? "نتایج جستجو" : "لیست محصولات" }}
@@ -823,40 +819,37 @@ onUnmounted(() => {
             v-for="product in shownProducts"
             :key="product.id"
             :to="`/products/${product.id}`"
-            class="border col-span-4 rounded-lg shadow-lg flex flex-col no-underline text-current hover:shadow-xl transition-shadow duration-200">
-            <div class="h-[35vh]">
-              <v-carousel
-                v-if="product.image_urls && product.image_urls.length > 0"
-                height="100%"
-                :show-arrows="product.image_urls.length > 1 ? 'hover' : false"
-                hide-delimiters
-                cycle
-                class="rounded-t-lg">
-                <v-carousel-item v-for="(imageUrl, i) in product.image_urls" :key="i" :src="imageUrl" cover></v-carousel-item>
-              </v-carousel>
-              <div v-else class="w-full h-full bg-gray-200 flex items-center justify-center rounded-t-lg">
-                <span class="text-gray-400">بدون تصویر</span>
-              </div>
-            </div>
+            class="card card-compact bg-base-100 shadow-lg hover:!shadow-3xl shadow-neutral-200 border-[1px] border-neutral-200 !rounded-lg transition-all duration-300 cursor-pointer group col-span-4 no-underline text-current relative overflow-hidden">
+            <div class="absolute top-0 right-0 w-1/4 h-1/4 border-t-[2px] border-r-[2px] border-yellow-500 rounded-tr-lg group-hover:rounded-lg rounded-bl-lg pointer-events-none z-10 transition-all duration-500 ease-out group-hover:w-full group-hover:h-full"></div>
+            <figure class="h-[35vh] overflow-hidden relative rounded-t-lg">
+              <img
+                :src="product.image_urls?.[0] || '/placeholder.png'"
+                :alt="product.title"
+                class="w-full h-full object-cover transition-all duration-700 ease-in-out group-hover:scale-110"
+                :class="{ 'group-hover:opacity-0': product.image_urls?.length > 1 }" />
 
-            <div class="!p-4 flex flex-col flex-grow">
-              <h2 class="text-xl font-semibold mb-2 truncate">
+              <img
+                v-if="product.image_urls?.length > 1"
+                :src="product.image_urls[1]"
+                :alt="product.title"
+                class="absolute inset-0 w-full h-full object-cover transition-all duration-500 ease-in-out opacity-0 group-hover:!opacity-100 group-hover:scale-110" />
+            </figure>
+
+            <div class="!p-3">
+              <h2 class="text-gray-800 line-clamp-2 h-12">
                 {{ product.title }}
               </h2>
-              <!-- دسته‌بندی محصول -->
-              <p class="text-xs text-gray-500 mb-2">
-                دسته‌بندی:
-                <span class="font-medium">
-                  {{ getTypeName(product) }}
-                </span>
-              </p>
-              <div class="flex-grow"></div>
-              <div class="flex justify-between items-center mt-4">
-                <p class="text-lg font-bold text-green-600">
+
+              <div class="flex items-center gap-2 mt-1">
+                <span class="text-gray-500 text-xs"> دسته بندی: {{ getTypeName(product) }} </span>
+              </div>
+              <div class="card-actions justify-end items-center">
+                <span class="text-primary text-xl font-bold">
                   {{ getPriceRange(product) }}
-                </p>
+                </span>
               </div>
             </div>
+            <div class="absolute bottom-0 left-0 w-1/4 h-1/4 border-b-[2px] border-l-[2px] border-yellow-500 rounded-bl-lg rounded-tr-lg group-hover:rounded-lg pointer-events-none z-10 transition-all duration-500 ease-out group-hover:w-full group-hover:h-full"></div>
           </NuxtLink>
         </div>
       </div>

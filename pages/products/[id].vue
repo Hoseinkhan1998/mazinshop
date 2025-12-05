@@ -270,96 +270,133 @@ const isPrimaryCtaDisabled = computed(() => {
       <v-alert type="error" prominent>{{ errorMessage }}</v-alert>
     </div>
 
-    <div v-else-if="product" class="grid grid-cols-12 gap-8">
-      <!-- Gallery -->
-      <div class="col-span-12 md:col-span-4">
-        <div class="sticky top-24">
-          <v-img :src="mainImageUrl" aspect-ratio="1" cover class="w-full rounded-lg shadow-md border mb-4"></v-img>
+    <div v-else-if="product" class="grid grid-cols-12 px-4 lg:px-16 gap-y-12 lg:gap-x-16 py-8">
+      <div class="col-span-12 md:col-span-5 lg:col-span-5">
+        <div class="sticky top-28 transition-all duration-300">
+          <div class="relative group overflow-hidden rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-500 border border-gray-100 bg-white">
+            <v-img :src="mainImageUrl" aspect-ratio="1" cover class="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700"></v-img>
 
-          <div v-if="thumbnailImages.length > 1" class="flex flex-wrap gap-2 justify-center">
-            <v-img
+            <div v-if="selectedVariant && selectedVariant.stock_quantity === 0" class="absolute inset-0 bg-white/60 flex items-center justify-center backdrop-blur-sm z-10">
+              <span class="text-red-600 font-extrabold text-2xl border-4 border-red-600 px-6 py-2 rounded-lg -rotate-12 opacity-80">ناموجود</span>
+            </div>
+          </div>
+
+          <div v-if="thumbnailImages.length > 1" class="mt-6 flex flex-wrap gap-3 justify-center">
+            <div
               v-for="(imgUrl, index) in thumbnailImages"
               :key="index"
-              :src="imgUrl"
-              aspect-ratio="1"
-              cover
-              class="w-16 h-16 rounded cursor-pointer border hover:border-primarymain transition-all"
-              :class="{ 'border-2 border-primarymain': selectedImageIndex === index }"
-              @click="selectImage(index)" />
+              class="relative w-20 h-20 rounded-xl overflow-hidden cursor-pointer transition-all duration-300 border-2"
+              :class="
+                selectedImageIndex === index ? 'border-primary ring-2 ring-primary/20 scale-110 shadow-lg' : 'border-transparent opacity-70 hover:opacity-100 hover:border-gray-300'
+              "
+              @click="selectImage(index)">
+              <v-img :src="imgUrl" cover class="w-full h-full"></v-img>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Details -->
-      <div class="col-span-12 md:col-span-8">
-        <h1 class="text-3xl font-bold mb-4">{{ product.title }}</h1>
-        <p class="text-sm text-gray-500 mb-4">
-          کد محصول: <span class="font-mono tracking-wide">{{ product.product_code }}</span>
-        </p>
-        <p v-if="productType" class="text-lg text-gray-500 mb-4">
-          دسته بندی: <strong class="text-gray-700">{{ productType.typename }}</strong>
-        </p>
-
-        <!-- Fixed & Variable attributes -->
-        <div class="space-y-4 mb-6">
-          <div v-for="attribute in categorizedAttributes.fixed" :key="attribute.name">
-            <p class="text-sm font-medium text-gray-700">
-              {{ attribute.name }}: <span class="font-bold">{{ attribute.value }}</span>
-            </p>
+      <div class="col-span-12 md:col-span-6 lg:col-span-6 flex flex-col">
+        <div class="pb-4">
+          <div class="flex items-center gap-3 mb-3">
+            <span v-if="productType" class="bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1 rounded-full"> دسته بندی: {{ productType.typename }} </span>
+            <span class="bg-gray-100 text-gray-500 text-xs font-mono px-2 py-1 rounded"> شناسه محصول: {{ product.product_code }} </span>
           </div>
 
-          <div v-for="attribute in categorizedAttributes.variable" :key="attribute.id">
-            <v-select
-              v-model="selectedOptions[attribute.name]"
-              :items="Array.from(uniqueAttributeValues[attribute.name] || [])"
-              :label="attribute.name"
-              variant="outlined"
-              density="compact"
-              hide-details
-              clearable
-              @update:modelValue="handleOptionChange" />
+          <h1 class="text-2xl lg:text-3xl font-semibold text-gray-900 leading-tight mb-4 tracking-tight">
+            {{ product.title }}
+          </h1>
+        </div>
+
+        <div v-if="categorizedAttributes.fixed.length > 0" class="mb-8">
+          <h3 class="text-sm font-semibold text-gray-400 mb-3 uppercase tracking-wider">مشخصات فنی</h3>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div v-for="attribute in categorizedAttributes.fixed" :key="attribute.name" class="bg-gray-50 border border-gray-100 rounded-lg !p-1 flex flex-col">
+              <span class="text-xs text-gray-500 mb-1">{{ attribute.name }}</span>
+              <span class="text-sm font-bold text-gray-800 !ps-2">{{ attribute.value }}</span>
+            </div>
           </div>
         </div>
 
-        <!-- Price -->
-        <div class="mb-6">
-          <p class="text-2xl font-bold">
-            <span v-if="currentPrice !== null" class="text-green-600"> {{ formatNumber(currentPrice) }} تومان </span>
+        <div class="bg-white lg:bg-gray-50/50 rounded-2xl lg:p-6 mb-8">
+          <div v-if="categorizedAttributes.variable.length > 0" class="!space-y-5 mb-8">
+            <div v-for="attribute in categorizedAttributes.variable" :key="attribute.id">
+              <!-- <label class="text-sm font-bold text-gray-800 mb-2 block"> انتخاب {{ attribute.name }} </label> -->
+              <v-select
+                v-model="selectedOptions[attribute.name]"
+                :items="Array.from(uniqueAttributeValues[attribute.name] || [])"
+                variant="outlined"
+                density="comfortable"
+                bg-color="white"
+                :label="attribute.name"
+                color="primary"
+                rounded="lg"
+                hide-details
+                placeholder="انتخاب کنید..."
+                @update:modelValue="handleOptionChange"></v-select>
+            </div>
+          </div>
 
-            <span v-else-if="isInvalidCombination" class="text-red-600"> ناموجود </span>
+          <div class="flex items-end gap-2 mb-6 border-t border-dashed border-gray-300 pt-6">
+            <div class="flex-grow">
+              <p class="text-sm text-gray-500 mb-1">قیمت نهایی:</p>
+              <p class="text-4xl font-black text-gray-900 tracking-tight">
+                <span v-if="currentPrice !== null"> {{ formatNumber(currentPrice) }} <span class="text-lg font-medium text-gray-500">تومان</span> </span>
+                <span v-else-if="isInvalidCombination" class="text-red-500 text-2xl">ناموجود</span>
+                <span v-else class="text-gray-400 text-xl">---</span>
+              </p>
+            </div>
 
-            <span v-else class="text-slate-500"> لطفاً گزینه‌های محصول را انتخاب کنید </span>
+            <div
+              v-if="!addedToCart && selectedVariant && selectedVariant.stock_quantity < 10 && selectedVariant.stock_quantity > 0"
+              class="bg-orange-100 text-orange-700 text-xs px-3 py-1 rounded-full font-bold animate-pulse">
+              فقط {{ formatNumber(selectedVariant.stock_quantity) }} عدد باقیست
+            </div>
+          </div>
+
+          <div v-if="!isInvalidCombination" class="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
+            <div class="flex items-center justify-between bg-white border border-gray-300 rounded-xl px-2 h-14 w-full sm:w-40 shrink-0">
+              <v-btn icon variant="text" size="small" color="grey" @click="decrement" :disabled="quantity <= 1">
+                <v-icon>mdi-minus</v-icon>
+              </v-btn>
+              <span class="text-lg font-bold text-gray-800 select-none w-8 text-center">{{ formatNumber(quantity) }}</span>
+              <v-btn
+                icon
+                variant="text"
+                size="small"
+                color="primary"
+                @click="increment"
+                :disabled="!selectedVariant || (selectedVariant && quantity >= selectedVariant.stock_quantity)">
+                <v-icon>mdi-plus</v-icon>
+              </v-btn>
+            </div>
+
+            <v-btn
+              color="primary"
+              size="x-large"
+              class="flex-grow !h-14 !rounded-xl !text-lg !font-bold !shadow-lg hover:!shadow-xl transition-all"
+              :class="{ '!bg-green-600 !text-white': addedToCart }"
+              elevation="4"
+              :disabled="isPrimaryCtaDisabled"
+              :prepend-icon="primaryCtaIcon"
+              @click="handleAddToCart">
+              {{ primaryCtaLabel }}
+            </v-btn>
+          </div>
+
+          <p v-if="!addedToCart && selectedVariant && selectedVariant.stock_quantity === 0" class="text-red-600 font-medium text-center mt-4 bg-red-50 p-2 rounded-lg">
+            متاسفانه موجودی این محصول به اتمام رسیده است.
           </p>
         </div>
 
-        <!-- Quantity -->
-        <div v-if="!isInvalidCombination" class="my-6">
-          <label class="block text-sm font-medium text-gray-700 mb-2">تعداد:</label>
-          <div class="flex items-center">
-            <v-btn icon="mdi-plus" size="small" :disabled="!selectedVariant || (selectedVariant && quantity >= selectedVariant.stock_quantity)" @click="increment" />
-            <span class="mx-4 text-xl font-semibold w-8 text-center">{{ formatNumber(quantity) }}</span>
-            <v-btn icon="mdi-minus" size="small" @click="decrement" :disabled="quantity <= 1" />
-          </div>
-        </div>
-
-        <!-- Primary CTA -->
-        <v-btn color="primary" size="large" class="w-full md:w-auto" :disabled="isPrimaryCtaDisabled" :prepend-icon="primaryCtaIcon" @click="handleAddToCart">
-          {{ primaryCtaLabel }}
-        </v-btn>
-
-        <p v-if="!addedToCart && selectedVariant && selectedVariant.stock_quantity < 10 && selectedVariant.stock_quantity > 0" class="text-orange-600 text-sm mt-2">
-          فقط {{ formatNumber(selectedVariant.stock_quantity) }} عدد در انبار باقی مانده!
-        </p>
-        <p v-else-if="!addedToCart && selectedVariant && selectedVariant.stock_quantity === 0" class="text-red-600 text-sm mt-2">موجودی انبار تمام شده است.</p>
-
-        <v-divider class="my-8"></v-divider>
-
-        <!-- Description -->
-        <div>
-          <h2 class="text-xl font-semibold mb-3">توضیحات محصول</h2>
-          <p class="text-gray-700 leading-relaxed">
+        <div class="mt-4">
+          <h2 class="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <v-icon color="primary">mdi-text-box-outline</v-icon>
+            توضیحات محصول
+          </h2>
+          <div class="prose prose-sm md:prose-base max-w-none text-gray-600 leading-loose text-justify bg-white rounded-2xl">
             {{ product.description || "توضیحاتی برای این محصول ارائه نشده است." }}
-          </p>
+          </div>
         </div>
       </div>
     </div>
