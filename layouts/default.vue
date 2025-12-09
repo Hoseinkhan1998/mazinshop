@@ -100,9 +100,9 @@ onMounted(async () => {
               <NuxtLink to="/" class="text-xl col-span-2 font-bold text-gray-800">
                 <img src="/images/logo.png" class="h-14 w-20" alt="" />
               </NuxtLink>
-              <div v-if="isAdmin && $route.path !== '/editproduct'" class="col-span-2 !-ms-10">
+              <!-- <div v-if="isAdmin && $route.path !== '/editproduct'" class="col-span-2 !-ms-10">
                 <NuxtLink to="/editproduct" class="px-2 rounded-lg mybg hov py-1">ویرایش فروشگاه من</NuxtLink>
-              </div>
+              </div> -->
               <div class="ms-5 col-span-6 flex items-center gap-10">
                 <HeaderSearch />
               </div>
