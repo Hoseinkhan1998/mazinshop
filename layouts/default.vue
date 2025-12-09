@@ -116,7 +116,22 @@ onMounted(async () => {
                   <v-icon class="text-white !text-2xl">mdi-account-circle</v-icon>
                   <p class="truncate max-w-40">{{ displayName }}</p>
                 </div>
-                <ul tabindex="0" class="dropdown-content relative menu gap-3 bg-neutral-100 mt-3 rounded-box z-[1] w-44 !p-2 shadow-xl shadow-neutral-200">
+                <ul tabindex="0" class="dropdown-content relative menu gap-3 bg-neutral-100 mt-3 rounded-box z-[1] w-48 !p-2 shadow-xl shadow-neutral-200">
+                  <NuxtLink
+                    v-if="isAdmin && $route.path !== '/editproduct'"
+                    to="/editproduct"
+                    class="cursor-pointer hover:!bg-neutral-200 px-4 py-1 transition-all duration-150 flex items-center gap-1 rounded-lg">
+                    <p>ویرایش فروشگاه من</p>
+                    <v-icon class="!text-xl text-yellow-500 transform -rotate-30">mdi-crown</v-icon>
+                  </NuxtLink>
+                  <NuxtLink
+                    v-if="isAdmin && $route.path !== '/admin/comments'"
+                    to="/admin/comments"
+                    class="cursor-pointer hover:!bg-neutral-200 px-4 py-1 transition-all duration-150 flex items-center gap-1 rounded-lg">
+                    <p>مدیریت کامنت‌ها</p>
+                    <v-icon class="!text-xl text-yellow-500 transform -rotate-30">mdi-crown</v-icon>
+                  </NuxtLink>
+
                   <NuxtLink to="/information" class="cursor-pointer hover:!bg-neutral-200 px-4 py-1 transition-all duration-150 rounded-lg">ویرایش پروفایل</NuxtLink>
                   <li>
                     <div @click="logoutDialog = true" class="px-4 py-1 bg-red-600 text-white font-semibold hover:bg-red-500 transition-all duration-150 cursor-pointer rounded-md">
@@ -127,8 +142,14 @@ onMounted(async () => {
               </div>
             </ClientOnly>
 
+            <ClientOnly v-if="isAdmin">
+              <div class="relative group">
+                <v-icon class="!text-3xl text-yellow-500 transform -rotate-30">mdi-crown</v-icon>
+                <v-tooltip class="!text-xs" activator="parent" location="bottom"><p class="text-xs">ادمین</p></v-tooltip>
+              </div>
+            </ClientOnly>
             <!-- سبد خرید: همیشه دیده شود -->
-            <NuxtLink to="/shoppingcard" class="cursor-pointer relative" aria-label="سبد خرید">
+            <NuxtLink v-else to="/shoppingcard" class="cursor-pointer relative" aria-label="سبد خرید">
               <ClientOnly>
                 <div v-if="cartCount > 0" class="rounded-full bg-red-500 text-xs flex justify-center items-center text-white absolute -top-2 -right-2 px-1 min-w-[18px] h-[18px]">
                   {{ cartCount }}
