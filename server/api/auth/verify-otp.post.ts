@@ -37,7 +37,7 @@ export default defineEventHandler(async (event: H3Event) => {
   await admin.from("phone_otps").update({ consumed: true }).eq("id", otp.id);
 
   // ساخت/آپدیت کاربر در Auth
-  const aliasLocal = `u_${phone}`; 
+  const aliasLocal = `u_${phone}`;
   const aliasEmail = `${aliasLocal}@${config.authAliasDomain}`;
   const password = randomPassword();
 
@@ -56,7 +56,7 @@ export default defineEventHandler(async (event: H3Event) => {
       password,
     });
     if (createErr && !createErr.message?.includes("already registered")) {
-      console.error('createUser error (details):', createErr);
+      console.error("createUser error (details):", createErr);
       throw createError({ statusCode: 500, statusMessage: "خطا در ایجاد کاربر" });
     }
     if (created?.user?.id) userId = created.user.id;
@@ -76,12 +76,17 @@ export default defineEventHandler(async (event: H3Event) => {
 
   // پروفایل را upsert کن
   if (userId) {
-    await admin.from("profiles").upsert({
+    const payload: any = {
       id: userId,
-      full_name: otp.meta?.full_name || "",
-      role: "user",
       phone_number: phone,
-    });
+    };
+
+    if (!existingProfile) {
+      payload.full_name = otp.meta?.full_name || "";
+      payload.role = "user";
+    }
+
+    await admin.from("profiles").upsert(payload);
   }
 
   // گرفتن توکن سشن با Password Grant
