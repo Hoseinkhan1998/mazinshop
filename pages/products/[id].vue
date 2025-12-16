@@ -23,6 +23,7 @@ const typesStore = useTypesStore();
 
 const loading = ref(true);
 const errorMessage = ref<string | null>(null);
+const isAdmin = computed(() => authStore.isAdmin);
 
 const quantity = ref(1);
 const productId = computed(() => Number(route.params.id));
@@ -53,9 +54,10 @@ const getReplies = (parentId: number) => productComments.value.filter((c) => c.p
 const formatDate = (iso: string) => {
   try {
     const d = new Date(iso);
-    return d.toLocaleString("fa-IR", {
-      dateStyle: "short",
-      timeStyle: "short",
+    return d.toLocaleDateString("fa-IR-u-ca-persian", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
     });
   } catch {
     return iso;
@@ -525,7 +527,7 @@ const deleteComment = async (comment: CommentWithMeta) => {
       </div>
 
       <section id="comments" class="mt-8 px-4 lg:px-16 pb-12">
-        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-6">
+        <div class="rounded-2xl p-6 space-y-6">
           <!-- هدر -->
           <div class="flex items-center justify-between gap-3">
             <div class="flex items-center gap-2">
@@ -536,7 +538,7 @@ const deleteComment = async (comment: CommentWithMeta) => {
           </div>
 
           <!-- فرم ثبت نظر -->
-          <div class="border border-dashed border-gray-200 rounded-xl p-4 bg-gray-50/60">
+          <div class="rounded-xl p-4 bg-gray-50/60">
             <div v-if="authStore.isLoggedIn" class="space-y-3">
               <div v-if="replyingTo" class="flex items-center justify-between text-xs bg-blue-50 text-blue-800 px-3 py-2 rounded-lg mb-2">
                 <span>
@@ -551,6 +553,7 @@ const deleteComment = async (comment: CommentWithMeta) => {
                 variant="outlined"
                 rows="3"
                 auto-grow
+                class="mt-4"
                 rounded="lg"
                 bg-color="white"
                 label="نظر یا پرسش خود را بنویسید..."
@@ -577,79 +580,106 @@ const deleteComment = async (comment: CommentWithMeta) => {
             <p class="mt-1 text-xs">اولین نفری باشید که تجربه‌تان را به اشتراک می‌گذارید 🌟</p>
           </div>
 
-          <div v-else class="space-y-4">
+          <div v-else class="divide-y divide-gray-100">
             <!-- کامنت‌های والد -->
-            <div v-for="comment in topLevelComments" :key="comment.id" class="border border-gray-100 rounded-xl p-4 bg-gray-50">
-              <!-- هدر -->
-              <div class="flex items-center justify-between gap-2 mb-2">
-                <div class="flex items-center gap-2">
-                  <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
-                    {{ (comment.user_full_name || "کاربر").slice(0, 2) }}
-                  </div>
-                  <div class="flex flex-col">
-                    <span class="text-sm font-semibold text-gray-800">
-                      {{ comment.user_full_name || "کاربر MazinShop" }}
-                      <span v-if="authStore.user && authStore.user.id === comment.user_id" class="text-[11px] text-blue-500 ms-1"> (شما) </span>
-                    </span>
-                    <span class="text-[11px] text-gray-400">
-                      {{ formatDate(comment.created_at) }}
-                    </span>
-                  </div>
-                </div>
+            <div v-for="comment in topLevelComments" :key="comment.id" class="py-5">
+              <div class="rounded-2xl bg-white px-4 sm:px-5 py-4 shadow-sm border border-gray-100">
+                <!-- هدر -->
+                <div class="flex items-center justify-between gap-2 mb-2">
+                  <div class="flex items-center gap-2">
+                    <div class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
+                      <v-icon size="26" color="primary">mdi-account</v-icon>
+                    </div>
 
-                <div class="flex items-center gap-1 text-[11px] text-gray-500">
-                  <v-btn v-if="canDeleteComment(comment)" icon variant="text" size="x-small" color="red" @click="deleteComment(comment)">
-                    <v-icon size="16">mdi-delete-outline</v-icon>
-                  </v-btn>
-                </div>
-              </div>
-
-              <!-- متن -->
-              <p class="text-sm text-gray-800 leading-relaxed whitespace-pre-line">
-                {{ comment.content }}
-              </p>
-
-              <!-- اکشن‌ها -->
-              <div class="mt-3 flex items-center gap-3 text-xs">
-                <button class="flex items-center gap-1 text-gray-500 hover:text-primary-600" @click="toggleLike(comment)">
-                  <v-icon size="18" :color="comment.my_vote === 1 ? 'primary' : undefined">
-                    {{ comment.my_vote === 1 ? "mdi-thumb-up" : "mdi-thumb-up-outline" }}
-                  </v-icon>
-                  <span>{{ formatNumber(comment.like_count) }}</span>
-                </button>
-
-                <button class="flex items-center gap-1 text-gray-500 hover:text-red-500" @click="toggleDislike(comment)">
-                  <v-icon size="18" :color="comment.my_vote === -1 ? 'red' : undefined">
-                    {{ comment.my_vote === -1 ? "mdi-thumb-down" : "mdi-thumb-down-outline" }}
-                  </v-icon>
-                  <span>{{ formatNumber(comment.dislike_count) }}</span>
-                </button>
-
-                <button class="flex items-center gap-1 text-gray-500 hover:text-primary" @click="startReply(comment)">
-                  <v-icon size="18">mdi-reply</v-icon>
-                  <span>پاسخ</span>
-                </button>
-              </div>
-
-              <!-- ریپلای‌ها -->
-              <div v-if="getReplies(comment.id).length" class="mt-3 ps-4 border-s border-gray-200 space-y-3">
-                <div v-for="reply in getReplies(comment.id)" :key="reply.id" class="bg-white rounded-lg p-3 border border-gray-100">
-                  <div class="flex items-center justify-between gap-2 mb-1">
-                    <div class="flex items-center gap-2">
-                      <span class="text-xs font-semibold text-gray-800">
-                        {{ reply.user_full_name || "کاربر MazinShop" }}
-                      </span>
-                      <span class="text-[11px] text-gray-400">
-                        {{ formatDate(reply.created_at) }}
+                    <div class="flex flex-col">
+                      <span class="text-sm font-semibold text-gray-800">
+                        {{ comment.user_full_name || "کاربر MazinShop" }}
+                        <span v-if="authStore.user && authStore.user.id === comment.user_id" class="text-[11px] text-blue-500 ms-1"> (شما) </span>
                       </span>
                     </div>
-                    <v-btn v-if="canDeleteComment(reply)" icon variant="text" size="x-small" color="red" @click="deleteComment(reply)">
-                      <v-icon size="16">mdi-delete-outline</v-icon>
+                  </div>
+
+                  <div class="flex items-center gap-2 text-[11px] text-gray-500">
+                    <span class="text-gray-400 !text-sm">
+                      {{ formatDate(comment.created_at) }}
+                    </span>
+                    <v-btn v-if="canDeleteComment(comment)" icon variant="text" size="x-small" color="red" @click="deleteComment(comment)">
+                      <v-icon size="18">mdi-delete</v-icon>
+                      <v-tooltip class="!text-xs" activator="parent" location="bottom"><p class="text-xs">حذف نظر</p></v-tooltip>
                     </v-btn>
                   </div>
-                  <p class="text-xs text-gray-800 whitespace-pre-line">
-                    {{ reply.content }}
-                  </p>
+                </div>
+
+                <!-- متن -->
+                <p class="text-sm text-gray-800 leading-relaxed whitespace-pre-line">
+                  {{ comment.content }}
+                </p>
+
+                <!-- اکشن‌ها -->
+                <div class="mt-3 flex items-center gap-3 text-xs">
+                  <button class="flex items-center gap-1 text-gray-500 hover:text-primary-600" @click="toggleLike(comment)">
+                    <v-icon size="18" :color="comment.my_vote === 1 ? 'primary' : undefined">
+                      {{ comment.my_vote === 1 ? "mdi-thumb-up" : "mdi-thumb-up-outline" }}
+                    </v-icon>
+                    <span>{{ formatNumber(comment.like_count) }}</span>
+                  </button>
+
+                  <button class="flex items-center gap-1 text-gray-500 hover:text-red-500" @click="toggleDislike(comment)">
+                    <v-icon size="18" :color="comment.my_vote === -1 ? 'red' : undefined">
+                      {{ comment.my_vote === -1 ? "mdi-thumb-down" : "mdi-thumb-down-outline" }}
+                    </v-icon>
+                    <span>{{ formatNumber(comment.dislike_count) }}</span>
+                  </button>
+
+                  <button class="flex items-center gap-1 text-gray-500 hover:text-primary" @click="startReply(comment)">
+                    <v-icon size="18">mdi-reply</v-icon>
+                    <span>پاسخ</span>
+                  </button>
+                </div>
+
+                <!-- ریپلای‌ها -->
+                <div v-if="getReplies(comment.id).length" class="mt-4 ms-4 ps-4 border-s-2 border-gray-100 space-y-3">
+                  <div v-for="reply in getReplies(comment.id)" :key="reply.id" class="rounded-xl bg-gray-50 px-4 py-3 border border-gray-100">
+                    <div class="flex items-center justify-between gap-2 mb-1">
+                      <div class="flex items-center gap-2">
+                        <div class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
+                          <v-icon size="26" :color="isAdmin ? 'yellow-darken-3' : 'primary'">{{ isAdmin ? "mdi-crown" : "mdi-account" }}</v-icon>
+                        </div>
+
+                        <span class="text-xs font-semibold text-gray-800">
+                          {{ isAdmin ? "پاسخ ادمین" : reply.user_full_name || "کاربر MazinShop" }}
+                        </span>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <span class="text-gray-400 !text-sm">
+                          {{ formatDate(reply.created_at) }}
+                        </span>
+                        <v-btn v-if="canDeleteComment(reply)" icon variant="text" size="x-small" color="red" @click="deleteComment(reply)">
+                          <v-icon size="18">mdi-delete</v-icon>
+                          <v-tooltip class="!text-xs" activator="parent" location="bottom"><p class="text-xs">حذف نظر</p></v-tooltip>
+                        </v-btn>
+                      </div>
+                    </div>
+                    <p class="text-xs text-gray-800 whitespace-pre-line">
+                      {{ reply.content }}
+                    </p>
+                    <!-- اکشن‌های ریپلای: فقط لایک/دیس‌لایک -->
+                    <div class="mt-2 flex items-center gap-3 text-xs">
+                      <button class="flex items-center gap-1 text-gray-500 hover:text-primary-600" @click="toggleLike(reply)">
+                        <v-icon size="18" :color="reply.my_vote === 1 ? 'primary' : undefined">
+                          {{ reply.my_vote === 1 ? "mdi-thumb-up" : "mdi-thumb-up-outline" }}
+                        </v-icon>
+                        <span>{{ formatNumber(reply.like_count) }}</span>
+                      </button>
+
+                      <button class="flex items-center gap-1 text-gray-500 hover:text-red-500" @click="toggleDislike(reply)">
+                        <v-icon size="18" :color="reply.my_vote === -1 ? 'red' : undefined">
+                          {{ reply.my_vote === -1 ? "mdi-thumb-down" : "mdi-thumb-down-outline" }}
+                        </v-icon>
+                        <span>{{ formatNumber(reply.dislike_count) }}</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

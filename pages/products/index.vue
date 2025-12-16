@@ -1,22 +1,41 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { useProductStore } from "~/stores/products";
 import type { Product } from "~/types/Product";
 import { useTypesStore } from "~/stores/types";
 
-const productStore = useProductStore();
+type SortMode = "newest" | "priceAsc" | "priceDesc" | null;
+
 const typesStore = useTypesStore();
 const route = useRoute();
 const router = useRouter();
-const openPanels = ref([]);
 
-const loading = ref(true);
+const loading = ref(true); // لود اولیه صفحه (types + options + اولین fetch)
+const productsLoading = ref(false); // لود محصولات از API
+const statsLoading = ref(false); // لود min/max قیمت از API
 
+// ---------- UI State ----------
+const openPanels = ref<any[]>([]);
 const selectedFilters = ref<Record<string, string[]>>({});
+const typeOptions = ref<Record<number, string[]>>({}); // { attribute_id: [values] }
 
-const typeOptions = ref<Record<number, string[]>>({});
+const sortBy = ref<SortMode>("newest");
 
+// قیمت
+const priceRange = ref<[number, number]>([0, 0]); // مقدار لحظه‌ای slider/input
+const appliedPriceRange = ref<[number, number] | null>(null); // مقدار اعمال‌شده (برای request)
+const minPriceInput = ref("");
+const maxPriceInput = ref("");
+
+// نتایج API
+const shownProducts = ref<Product[]>([]);
+const mixedFromServer = ref(false);
+
+// stats از DB (بدون اعمال فیلتر قیمت)
+const priceStatsRaw = ref<{ min: number; max: number }>({ min: 0, max: 0 });
+const priceStats = computed(() => priceStatsRaw.value);
+
+// ---------- Derived from Route ----------
 const currentTypeId = computed(() => {
   const t = Number(route.query.type);
   return Number.isNaN(t) ? null : t;
@@ -30,417 +49,38 @@ const currentType = computed(() => {
 const searchQuery = computed(() => ((route.query.search as string) || "").trim());
 const hasSearch = computed(() => searchQuery.value.length > 0);
 
-// ---------- لود اولیه ----------
-const ensureTypesLoaded = async () => {
-  if (typesStore.types.length === 0) {
-    await typesStore.fetchTypes();
-  }
-};
-
-const ensureProductsLoaded = async () => {
-  if (productStore.products.length === 0) {
-    await productStore.fetchProducts();
-  }
-};
-
-const loadTypeOptions = async () => {
-  if (!currentTypeId.value) {
-    typeOptions.value = {};
-    return;
-  }
-  const options = await typesStore.fetchOptionsForType(currentTypeId.value);
-  typeOptions.value = options; // { attribute_id: [values] }
-};
-
-onMounted(async () => {
-  await ensureTypesLoaded();
-  await ensureProductsLoaded();
-
-  // اگر نه سرچ هست و نه type ⇒ برو روی اولین type
-  if (!hasSearch.value && !route.query.type && typesStore.types.length > 0) {
-    await router.replace({
-      path: "/products",
-      query: { type: typesStore.types[0].id },
-    });
-  }
-
-  if (currentTypeId.value) {
-    await loadTypeOptions();
-  }
-
-  loading.value = false;
+// چون دیگر mixing نداریم (سرچ + دسته فقط همان دسته را می‌آورد)
+const hasMixedTypes = computed(() => {
+  if (!hasSearch.value || !currentTypeId.value) return false;
+  return mixedFromServer.value;
 });
 
-// وقتی type در URL عوض شد ⇒ فیلترهای ویژگی ریست و options لود
-watch(
-  () => route.query.type,
-  async () => {
-    selectedFilters.value = {};
-    if (currentTypeId.value) {
-      await loadTypeOptions();
-    } else {
-      typeOptions.value = {};
-    }
-  }
-);
-
-// هر بار که type یا search عوض می‌شود، فیلتر قیمت ریست شود
-watch(
-  () => [currentTypeId.value, searchQuery.value],
-  () => {
-    appliedPriceRange.value = null;
-  }
-);
-
-// ---------- Helpers عمومی ----------
+// ---------- Helpers ----------
 const formatNumber = (num: number | null | undefined) => {
   if (num == null) return "";
   return num.toLocaleString("fa-IR");
 };
 
-// نقشه type_id → نام دسته‌بندی
-const typeNameMap = computed(() => {
-  const m = new Map<number, string>();
-  for (const t of typesStore.types) {
-    m.set(t.id, t.typename);
-  }
-  return m;
-});
-
-const getTypeName = (product: Product) => {
-  return typeNameMap.value.get(product.type_id) || "نامشخص";
-};
-
-// تابع برای محاسبه و نمایش بازه قیمتی در کارت محصول
-const getPriceRange = (product: Product): string => {
-  if (!Array.isArray(product.product_variants) || product.product_variants.length === 0) return "ناموجود";
-
-  const prices = product.product_variants.map((v) => v.price).filter((p) => typeof p === "number");
-  if (prices.length === 0) return "ناموجود";
-
-  const minPrice = Math.min(...prices);
-  const maxPrice = Math.max(...prices);
-
-  if (minPrice === maxPrice) {
-    return `${formatNumber(minPrice)} تومان`;
-  }
-  // طبق درخواست جدید، همیشه فقط کمترین قیمت را با پیشوند "از" نمایش می‌دهیم
-  return `${formatNumber(minPrice)} تومان`;
-};
-
-// کمترین قیمت یک محصول (برای مرتب‌سازی و فیلتر)
-const getProductMinPrice = (product: Product): number => {
-  if (!Array.isArray(product.product_variants) || product.product_variants.length === 0) {
-    return Number.POSITIVE_INFINITY;
-  }
-  const prices = product.product_variants.map((v) => v.price).filter((p) => typeof p === "number");
-  if (!prices.length) return Number.POSITIVE_INFINITY;
-  return Math.min(...prices);
-};
-
-// ---------- پروداکت جنریتور (۵۰تایی) برای حالت‌های سرچ ----------
-
-const MAX_PRODUCTS = 50;
-
-const aggregationResult = computed<{
-  list: Product[];
-  mixed: boolean;
-}>(() => {
-  if (!hasSearch.value) {
-    return { list: [], mixed: false };
-  }
-
-  const allProducts = productStore.products;
-  if (!allProducts.length) {
-    return { list: [], mixed: false };
-  }
-
-  const primaryTypeId = currentTypeId.value; // ممکنه null باشه (وقتی فقط سرچ شده)
-  const q = searchQuery.value.toLowerCase();
-
-  // تقسیم محصولات به "مچ‌شده" و "غیر مچ" بر اساس type
-  const matchesByType = new Map<number, Product[]>();
-  const nonMatchesByType = new Map<number, Product[]>();
-  const allTypeIdsSet = new Set<number>();
-
-  for (const p of allProducts) {
-    const tId = p.type_id as number | null;
-    if (!tId) continue;
-
-    allTypeIdsSet.add(tId);
-
-    const matches = p.title.toLowerCase().includes(q);
-    const map = matches ? matchesByType : nonMatchesByType;
-
-    const arr = map.get(tId) || [];
-    arr.push(p);
-    map.set(tId, arr);
-  }
-
-  // helper: مرتب‌سازی داخل هر لیست بر اساس جدیدترین (created_at)
-  const sortByNewest = (arr: Product[]) =>
-    arr.sort((a, b) => {
-      const da = (a as any).created_at ? new Date((a as any).created_at).getTime() : 0;
-      const db = (b as any).created_at ? new Date((b as any).created_at).getTime() : 0;
-      return db - da;
-    });
-
-  for (const [tid, arr] of matchesByType.entries()) {
-    sortByNewest(arr);
-  }
-  for (const [tid, arr] of nonMatchesByType.entries()) {
-    sortByNewest(arr);
-  }
-
-  const list: Product[] = [];
-  const usedIds = new Set<number>();
-  let mixed = false;
-
-  const pushFromList = (items: Product[] | undefined, typeIdForItems?: number) => {
-    if (!items) return;
-
-    for (const p of items) {
-      if (list.length >= MAX_PRODUCTS) break;
-      if (usedIds.has(p.id)) continue;
-
-      // فقط وقتی type مشخص شده (سرچ + دسته) و داریم از دسته‌ی دیگری آیتم می‌آوریم
-      if (primaryTypeId && typeIdForItems && typeIdForItems !== primaryTypeId) {
-        mixed = true;
-      }
-
-      list.push(p);
-      usedIds.add(p.id);
-    }
-  };
-
-  const matchesTypeIds = Array.from(matchesByType.keys());
-  const allTypeIds = Array.from(allTypeIdsSet);
-
-  if (primaryTypeId) {
-    pushFromList(matchesByType.get(primaryTypeId), primaryTypeId);
-
-    // 2) مچ‌ها در بقیه دسته‌هایی که مچ دارند
-    const otherMatchedTypeIds = matchesTypeIds.filter((tid) => tid !== primaryTypeId);
-    for (const tid of otherMatchedTypeIds) {
-      if (list.length >= MAX_PRODUCTS) break;
-      pushFromList(matchesByType.get(tid), tid);
-    }
-
-    // 3) غیرمچ‌های دسته انتخاب‌شده
-    if (list.length < MAX_PRODUCTS) {
-      pushFromList(nonMatchesByType.get(primaryTypeId), primaryTypeId);
-    }
-
-    // 4) غیرمچ‌های بقیه دسته‌هایی که مچ داشتند
-    if (list.length < MAX_PRODUCTS) {
-      for (const tid of otherMatchedTypeIds) {
-        if (list.length >= MAX_PRODUCTS) break;
-        pushFromList(nonMatchesByType.get(tid), tid);
-      }
-    }
-
-    // 5) دسته‌هایی که هیچ مچ نداشتند ⇒ هرچی محصول دارند (غیرمچ‌ها)
-    if (list.length < MAX_PRODUCTS) {
-      const remainingTypeIds = allTypeIds.filter((tid) => tid !== primaryTypeId && !matchesByType.has(tid));
-
-      for (const tid of remainingTypeIds) {
-        if (list.length >= MAX_PRODUCTS) break;
-        pushFromList(nonMatchesByType.get(tid), tid);
-      }
-    }
-  } else {
-    // 1) مچ‌ها در همه دسته‌ها
-    for (const tid of matchesTypeIds) {
-      if (list.length >= MAX_PRODUCTS) break;
-      pushFromList(matchesByType.get(tid), tid);
-    }
-    // 2) غیرمچ‌های همان دسته‌هایی که مچ داشتند
-    if (list.length < MAX_PRODUCTS) {
-      for (const tid of matchesTypeIds) {
-        if (list.length >= MAX_PRODUCTS) break;
-        pushFromList(nonMatchesByType.get(tid), tid);
-      }
-    }
-    // 3) دسته‌هایی که هیچ مچ نداشتند ⇒ همه محصولاتشان
-    if (list.length < MAX_PRODUCTS) {
-      const remainingTypeIds = allTypeIds.filter((tid) => !matchesByType.has(tid));
-
-      for (const tid of remainingTypeIds) {
-        if (list.length >= MAX_PRODUCTS) break;
-        pushFromList(nonMatchesByType.get(tid), tid);
-      }
-    }
-
-    // فقط جهت اطلاع
-    const typeSet = new Set<number>();
-    for (const p of list) {
-      if (p.type_id) typeSet.add(p.type_id);
-    }
-    mixed = typeSet.size > 1;
-  }
-
-  return { list, mixed };
-});
-
-// آیا در حالت سرچ + type، مجبور شدیم از چند دسته محصول بیاوریم؟
-const hasMixedTypes = computed(() => {
-  if (!hasSearch.value || !currentTypeId.value) return false;
-  return aggregationResult.value.mixed;
-});
-
-const baseProducts = computed<Product[]>(() => {
-  const allProducts = productStore.products;
-  if (!allProducts.length) return [];
-
-  if (!hasSearch.value) {
-    let list = allProducts;
-
-    // فیلتر بر اساس type (دسته انتخاب‌شده از هدر)
-    if (currentTypeId.value) {
-      list = list.filter((p) => p.type_id === currentTypeId.value);
-    }
-
-    // اگر type نداریم، فقط همین لیست را برگردان
-    if (!currentTypeId.value) {
-      return list;
-    }
-
-    // فیلتر ویژگی‌ها
-    const activeFilters = Object.entries(selectedFilters.value).filter(([, values]) => values && values.length > 0);
-    if (activeFilters.length === 0) {
-      return list;
-    }
-
-    return list.filter((product) => {
-      if (!product.product_variants || product.product_variants.length === 0) return false;
-
-      return product.product_variants.some((variant) => {
-        const attrs = variant.attributes as Record<string, string>;
-        return activeFilters.every(([attrName, values]) => {
-          const vVal = attrs[attrName];
-          if (!vVal) return false;
-          return (values as string[]).includes(vVal);
-        });
-      });
-    });
-  }
-
-  const { list, mixed } = aggregationResult.value;
-
-  // حالت سرچ بدون type ⇒ فقط همون لیست پروداکت‌جنریتور، بدون فیلتر ویژگی
-  if (!currentTypeId.value) {
-    return list;
-  }
-
-  const activeFilters = Object.entries(selectedFilters.value).filter(([, values]) => values && values.length > 0);
-  if (mixed || activeFilters.length === 0) {
-    return list;
-  }
-
-  // اینجا: سرچ + type و همه نتایج از همان type ⇒ می‌توانیم فیلتر ویژگی را اعمال کنیم
-  return list.filter((product) => {
-    if (!product.product_variants || product.product_variants.length === 0) return false;
-
-    return product.product_variants.some((variant) => {
-      const attrs = variant.attributes as Record<string, string>;
-      return activeFilters.every(([attrName, values]) => {
-        const vVal = attrs[attrName];
-        if (!vVal) return false;
-        return (values as string[]).includes(vVal);
-      });
-    });
-  });
-});
-
-// ---------- فیلتر قیمت (ورودی + اسلایدر + دکمه اعمال) ----------
-
-const sortBy = ref<"newest" | "priceAsc" | "priceDesc" | null>("newest");
-
-const priceRange = ref<[number, number]>([0, 0]);
-
-const appliedPriceRange = ref<[number, number] | null>(null);
-
-const priceStats = computed(() => {
-  const products = baseProducts.value;
-  let min = Number.POSITIVE_INFINITY;
-  let max = 0;
-
-  for (const p of products) {
-    if (!Array.isArray(p.product_variants)) continue;
-    for (const v of p.product_variants) {
-      const price = v.price;
-      if (typeof price !== "number") continue;
-      if (price < min) min = price;
-      if (price > max) max = price;
-    }
-  }
-
-  if (!Number.isFinite(min)) min = 0;
-  if (max < min) max = min;
-
-  return { min, max };
-});
-
-watch(
-  () => priceStats.value,
-  ({ max }) => {
-    if (max <= 0) {
-      priceRange.value = [0, 0];
-      return;
-    }
-
-    if (!appliedPriceRange.value) {
-      priceRange.value = [0, max];
-    } else {
-      let [aMin, aMax] = appliedPriceRange.value;
-      if (aMax > max) aMax = max;
-      if (aMin > aMax) aMin = 0;
-      appliedPriceRange.value = [aMin, aMax];
-      priceRange.value = [aMin, aMax];
-    }
-  },
-  { immediate: true }
-);
-
-// کمک برای تبدیل اعداد فارسی/کاما دار به عدد ساده
 const parsePriceInput = (val: string): number => {
   if (!val) return 0;
   const persianDigits = "۰۱۲۳۴۵۶۷۸۹";
   let normalized = "";
   for (const ch of val) {
     const idx = persianDigits.indexOf(ch);
-    if (idx >= 0) {
-      normalized += String(idx);
-    } else if (/[0-9]/.test(ch)) {
-      normalized += ch;
-    }
+    if (idx >= 0) normalized += String(idx);
+    else if (/[0-9]/.test(ch)) normalized += ch;
   }
   const n = Number(normalized || "0");
   return Number.isNaN(n) ? 0 : n;
 };
 
-// رشته‌ی نمایش برای اینپوت‌ها
-const minPriceInput = ref("");
-const maxPriceInput = ref("");
-
-// وقتی priceRange عوض می‌شود، اینپوت‌ها را با جداکننده سه‌تایی آپدیت کن
-watch(
-  () => priceRange.value,
-  ([min, max]) => {
-    minPriceInput.value = formatNumber(min);
-    maxPriceInput.value = formatNumber(max);
-  },
-  { immediate: true }
-);
-
-// تبدیل اعداد فارسی کیبورد به انگلیسی برای محاسبه
 const toEnglishDigit = (char: string) => {
   const persianDigits = "۰۱۲۳۴۵۶۷۸۹";
   const idx = persianDigits.indexOf(char);
   return idx >= 0 ? String(idx) : char;
 };
 
-// اعتبارسنجی دقیق هنگام تایپ (دیوار + تبدیل به سقف)
+// فقط max-bound برای اعتبارسنجی (مثل نسخه قبلی)
 const validatePriceKeyPress = (e: KeyboardEvent, currentValStr: string, isMinInput: boolean) => {
   const allowedKeys = ["Backspace", "Delete", "ArrowLeft", "ArrowRight", "Tab", "Home", "End"];
   if (allowedKeys.includes(e.key)) return;
@@ -458,23 +98,17 @@ const validatePriceKeyPress = (e: KeyboardEvent, currentValStr: string, isMinInp
 
   const currentNum = parsePriceInput(currentValStr);
   const newKey = toEnglishDigit(e.key);
-
   const potentialNumber = Number(String(currentNum) + newKey);
 
   if (potentialNumber > max) {
     e.preventDefault();
-
     if (currentNum < max) {
-      if (isMinInput) {
-        handleMinPriceInput(String(max));
-      } else {
-        handleMaxPriceInput(String(max));
-      }
+      if (isMinInput) handleMinPriceInput(String(max));
+      else handleMaxPriceInput(String(max));
     }
   }
 };
 
-// هندل تغییر اینپوت "از"
 const handleMinPriceInput = (val: string) => {
   const maxBound = priceStats.value.max || 0;
   let n = parsePriceInput(val);
@@ -485,20 +119,12 @@ const handleMinPriceInput = (val: string) => {
   let newMin = n;
   let newMax = currentMax;
 
-  if (newMin > newMax) {
-    newMax = newMin;
-  }
-
-  if (newMin === priceRange.value[0] && newMax === priceRange.value[1]) {
-    minPriceInput.value = formatNumber(newMin);
-    return;
-  }
+  if (newMin > newMax) newMax = newMin;
 
   priceRange.value = [newMin, newMax];
   minPriceInput.value = formatNumber(newMin);
 };
 
-// هندل تغییر اینپوت "تا"
 const handleMaxPriceInput = (val: string) => {
   const maxBound = priceStats.value.max || 0;
   let n = parsePriceInput(val);
@@ -509,34 +135,244 @@ const handleMaxPriceInput = (val: string) => {
   let newMin = currentMin;
   let newMax = n;
 
-  if (newMax < newMin) {
-    newMin = newMax;
-  }
-
-  if (newMin === priceRange.value[0] && newMax === priceRange.value[1]) {
-    maxPriceInput.value = formatNumber(newMax);
-    return;
-  }
+  if (newMax < newMin) newMin = newMax;
 
   priceRange.value = [newMin, newMax];
   maxPriceInput.value = formatNumber(newMax);
 };
 
-// آیا دکمه اعمال محدوده قیمت فعال باشد؟
+// ---------- Type name (category) helpers ----------
+const typeNameMap = computed(() => {
+  const m = new Map<number, string>();
+  for (const t of typesStore.types) {
+    m.set(t.id, t.typename);
+  }
+  return m;
+});
+
+const getTypeName = (product: Product) => {
+  return typeNameMap.value.get(product.type_id) || "نامشخص";
+};
+
+// ---------- Price helpers (card) ----------
+const getPriceRange = (product: Product): string => {
+  const variants = (product as any)?.product_variants;
+
+  if (!Array.isArray(variants) || variants.length === 0) return "ناموجود";
+
+  const prices = variants.map((v: any) => Number(v?.price)).filter((p: number) => Number.isFinite(p));
+
+  if (prices.length === 0) return "ناموجود";
+
+  const minPrice = Math.min(...prices);
+  // طبق همون منطق قبلی: فقط کمترین قیمت را نشان بده
+  return `${formatNumber(minPrice)} تومان`;
+};
+
+// ---------- Filters (attributes) ----------
+const toggleFilter = (attrName: string, value: string, checked: boolean) => {
+  const current = selectedFilters.value[attrName] || [];
+  if (checked) {
+    if (!current.includes(value)) selectedFilters.value[attrName] = [...current, value];
+  } else {
+    selectedFilters.value[attrName] = current.filter((v) => v !== value);
+  }
+};
+
+const activeFilters = computed(() => {
+  return Object.fromEntries(Object.entries(selectedFilters.value).filter(([, values]) => values && values.length > 0));
+});
+
+const activeFiltersKey = computed(() => JSON.stringify(activeFilters.value));
+
+// ---------- API: Abort + Debounce ----------
+let productsAbort: AbortController | null = null;
+let statsAbort: AbortController | null = null;
+
+let productsTimer: ReturnType<typeof setTimeout> | null = null;
+let statsTimer: ReturnType<typeof setTimeout> | null = null;
+
+const PRODUCTS_DEBOUNCE_MS = 250;
+const STATS_DEBOUNCE_MS = 250;
+
+const buildProductsParams = () => {
+  const params = new URLSearchParams();
+
+  if (currentTypeId.value) params.set("type", String(currentTypeId.value));
+  if (hasSearch.value) params.set("search", searchQuery.value);
+
+  if (sortBy.value) params.set("sort", sortBy.value);
+
+  if (appliedPriceRange.value) {
+    params.set("minPrice", String(appliedPriceRange.value[0]));
+    params.set("maxPrice", String(appliedPriceRange.value[1]));
+  }
+
+  const af = activeFilters.value;
+  if (Object.keys(af).length) params.set("filters", JSON.stringify(af));
+
+  params.set("limit", "50");
+  params.set("offset", "0");
+
+  return params;
+};
+
+const buildStatsParams = () => {
+  const params = new URLSearchParams();
+
+  if (currentTypeId.value) params.set("type", String(currentTypeId.value));
+  if (hasSearch.value) params.set("search", searchQuery.value);
+
+  const af = activeFilters.value;
+  if (Object.keys(af).length) params.set("filters", JSON.stringify(af));
+
+  return params;
+};
+
+const fetchProductsFromApi = async () => {
+  // abort request قبلی
+  if (productsAbort) productsAbort.abort();
+  productsAbort = new AbortController();
+
+  productsLoading.value = true;
+  try {
+    const params = buildProductsParams();
+    const res = await $fetch<{ products: Product[]; mixed?: boolean }>(`/api/products?${params.toString()}`, {
+      signal: productsAbort.signal,
+    });
+    shownProducts.value = res.products || [];
+    mixedFromServer.value = !!res.mixed;
+  } catch (err: any) {
+    // اگر abort شد، خطا نگیریم
+    if (err?.name !== "AbortError") {
+      console.error("fetchProductsFromApi error:", err);
+    }
+  } finally {
+    productsLoading.value = false;
+  }
+};
+
+const fetchPriceStatsFromApi = async () => {
+  if (statsAbort) statsAbort.abort();
+  statsAbort = new AbortController();
+
+  statsLoading.value = true;
+  try {
+    const params = buildStatsParams();
+    const res = await $fetch<{ min: number; max: number }>(`/api/products/stats?${params.toString()}`, {
+      signal: statsAbort.signal,
+    });
+
+    const min = Number(res.min ?? 0);
+    const max = Number(res.max ?? 0);
+    priceStatsRaw.value = {
+      min: Number.isFinite(min) ? min : 0,
+      max: Number.isFinite(max) ? max : 0,
+    };
+  } catch (err: any) {
+    if (err?.name !== "AbortError") {
+      console.error("fetchPriceStatsFromApi error:", err);
+    }
+  } finally {
+    statsLoading.value = false;
+  }
+};
+
+const scheduleFetchProducts = (immediate = false) => {
+  if (productsTimer) clearTimeout(productsTimer);
+  if (immediate) {
+    fetchProductsFromApi();
+    return;
+  }
+  productsTimer = setTimeout(() => {
+    fetchProductsFromApi();
+  }, PRODUCTS_DEBOUNCE_MS);
+};
+
+const scheduleFetchStats = (immediate = false) => {
+  if (statsTimer) clearTimeout(statsTimer);
+  if (immediate) {
+    fetchPriceStatsFromApi();
+    return;
+  }
+  statsTimer = setTimeout(() => {
+    fetchPriceStatsFromApi();
+  }, STATS_DEBOUNCE_MS);
+};
+
+const scheduleFetchAll = (immediate = false) => {
+  scheduleFetchStats(immediate);
+  scheduleFetchProducts(immediate);
+};
+
+// ---------- Types + Options ----------
+const ensureTypesLoaded = async () => {
+  if (typesStore.types.length === 0) {
+    await typesStore.fetchTypes();
+  }
+};
+
+const loadTypeOptions = async () => {
+  if (!currentTypeId.value) {
+    typeOptions.value = {};
+    return;
+  }
+  const options = await typesStore.fetchOptionsForType(currentTypeId.value);
+  typeOptions.value = options;
+};
+
+// ---------- Price range syncing with stats ----------
+watch(
+  () => priceStats.value,
+  ({ max }) => {
+    if (max <= 0) {
+      priceRange.value = [0, 0];
+      minPriceInput.value = "0";
+      maxPriceInput.value = "0";
+      appliedPriceRange.value = null;
+      return;
+    }
+
+    // clamp applied range با max جدید
+    if (appliedPriceRange.value) {
+      let [aMin, aMax] = appliedPriceRange.value;
+      if (aMin < 0) aMin = 0;
+      if (aMax > max) aMax = max;
+      if (aMin > aMax) aMin = 0;
+      appliedPriceRange.value = [aMin, aMax];
+      priceRange.value = [aMin, aMax];
+    } else {
+      // default: 0..max
+      priceRange.value = [0, max];
+    }
+
+    minPriceInput.value = formatNumber(priceRange.value[0]);
+    maxPriceInput.value = formatNumber(priceRange.value[1]);
+  },
+  { immediate: true }
+);
+
+// وقتی priceRange عوض می‌شود، اینپوت‌ها آپدیت شود
+watch(
+  () => priceRange.value,
+  ([min, max]) => {
+    minPriceInput.value = formatNumber(min);
+    maxPriceInput.value = formatNumber(max);
+  }
+);
+
+// ---------- Apply/Clear price filter ----------
 const canApplyPriceFilter = computed(() => {
   if (!priceStats.value.max || priceStats.value.max <= 0) return false;
 
   const [curMin, curMax] = priceRange.value;
-  if (!appliedPriceRange.value && curMin === 0 && curMax === priceStats.value.max) return false;
 
-  if (appliedPriceRange.value && appliedPriceRange.value[0] === curMin && appliedPriceRange.value[1] === curMax) {
-    return false;
-  }
+  if (!appliedPriceRange.value && curMin === 0 && curMax === priceStats.value.max) return false;
+  if (appliedPriceRange.value && appliedPriceRange.value[0] === curMin && appliedPriceRange.value[1] === curMax) return false;
 
   return true;
 });
 
-// دکمه "اعمال محدوده قیمت"
 const applyPriceFilter = () => {
   const [minVal, maxVal] = priceRange.value;
   if (minVal === 0 && maxVal === priceStats.value.max) {
@@ -544,64 +380,83 @@ const applyPriceFilter = () => {
   } else {
     appliedPriceRange.value = [minVal, maxVal];
   }
+  // با debounce (پروژه حرفه‌ای)
+  scheduleFetchProducts(false);
 };
 
-// حذف فیلتر قیمت
 const clearPriceFilter = () => {
   appliedPriceRange.value = null;
   const max = priceStats.value.max || 0;
   priceRange.value = [0, max];
+  scheduleFetchProducts(false);
 };
 
-// ---------- محصولات نهایی برای نمایش (پایه + فیلتر قیمت + مرتب‌سازی) ----------
+// ---------- Route watchers ----------
+watch(
+  () => route.query.type,
+  async () => {
+    // با تغییر type: فیلترهای ویژگی ریست + options جدید
+    selectedFilters.value = {};
+    openPanels.value = [];
 
-const shownProducts = computed<Product[]>(() => {
-  let list = baseProducts.value;
+    // price filter ریست
+    appliedPriceRange.value = null;
 
-  if (appliedPriceRange.value) {
-    const [minP, maxP] = appliedPriceRange.value;
-    list = list.filter((product) => {
-      if (!Array.isArray(product.product_variants) || product.product_variants.length === 0) return false;
-      return product.product_variants.some((v) => v.price >= minP && v.price <= maxP);
+    await loadTypeOptions();
+    scheduleFetchAll(true);
+  }
+);
+
+// با تغییر سرچ: فیلتر قیمت ریست (مثل قبل)
+watch(
+  () => searchQuery.value,
+  () => {
+    appliedPriceRange.value = null;
+    scheduleFetchAll(false);
+  }
+);
+
+// با تغییر sort / price-applied => محصولات باید دوباره از API بیایند
+watch(
+  () => [sortBy.value, appliedPriceRange.value],
+  () => {
+    scheduleFetchProducts(false);
+  },
+  { deep: true }
+);
+
+// با تغییر فیلترهای ویژگی: هم stats و هم products باید آپدیت شوند
+watch(
+  () => activeFiltersKey.value,
+  () => {
+    appliedPriceRange.value = null; // حرفه‌ای‌تر: چون stats عوض می‌شود، قیمت اعمال‌شده را ریست کن
+    scheduleFetchAll(false);
+  }
+);
+
+// ---------- Initial load ----------
+onMounted(async () => {
+  await ensureTypesLoaded();
+
+  // اگر نه سرچ داریم و نه type ⇒ برو روی اولین type
+  if (!hasSearch.value && !route.query.type && typesStore.types.length > 0) {
+    await router.replace({
+      path: "/products",
+      query: { type: typesStore.types[0].id },
     });
   }
 
-  const arr = [...list];
+  await loadTypeOptions();
 
-  // مرتب‌سازی
-  if (sortBy.value === "priceAsc") {
-    arr.sort((a, b) => getProductMinPrice(a) - getProductMinPrice(b));
-  } else if (sortBy.value === "priceDesc") {
-    arr.sort((a, b) => getProductMinPrice(b) - getProductMinPrice(a));
-  } else if (sortBy.value === "newest") {
-    if (!hasSearch.value) {
-      arr.sort((a, b) => {
-        const da = (a as any).created_at ? new Date((a as any).created_at).getTime() : 0;
-        const db = (b as any).created_at ? new Date((b as any).created_at).getTime() : 0;
-        return db - da;
-      });
-    }
-  }
-  // اگر sortBy = null ⇒ هیچ مرتب‌سا زی اضافه‌ای انجام نمی‌دهیم
+  // اولین fetch (بدون debounce)
+  await Promise.all([fetchPriceStatsFromApi(), fetchProductsFromApi()]);
 
-  return arr;
+  loading.value = false;
 });
-
-// ---------- تغییر تیک فیلترهای ویژگی ----------
-const toggleFilter = (attrName: string, value: string, checked: boolean) => {
-  const current = selectedFilters.value[attrName] || [];
-  if (checked) {
-    if (!current.includes(value)) {
-      selectedFilters.value[attrName] = [...current, value];
-    }
-  } else {
-    selectedFilters.value[attrName] = current.filter((v) => v !== value);
-  }
-};
 
 // ---------- Smart Sticky Sidebar Logic ----------
 const sidebarRef = ref<HTMLElement | null>(null);
-const sidebarTop = ref(144); // مقدار اولیه (معادل top-36 یا 9rem)
+const sidebarTop = ref(144);
 let lastScrollY = 0;
 
 const handleScroll = () => {
@@ -612,9 +467,8 @@ const handleScroll = () => {
   const sidebarHeight = sidebarEl.offsetHeight;
   const windowHeight = window.innerHeight;
 
-  // تنظیمات فاصله
-  const headerOffset = 144; // فاصله از سقف (همان top-36)
-  const bottomPadding = 20; // فاصله از کف وقتی می‌چسبد
+  const headerOffset = 144;
+  const bottomPadding = 20;
 
   if (sidebarHeight < windowHeight - headerOffset) {
     sidebarTop.value = headerOffset;
@@ -622,11 +476,12 @@ const handleScroll = () => {
     return;
   }
 
-  // محاسبه جهت و مقدار اسکرول
   const delta = currentScrollY - lastScrollY;
   let newTop = sidebarTop.value - delta;
+
   const maxTop = headerOffset;
   const minTop = windowHeight - sidebarHeight - bottomPadding;
+
   if (newTop > maxTop) newTop = maxTop;
   if (newTop < minTop) newTop = minTop;
 
@@ -634,12 +489,11 @@ const handleScroll = () => {
   lastScrollY = currentScrollY;
 };
 
-// اضافه کردن لیسنر اسکرول
 onMounted(() => {
   if (typeof window !== "undefined") {
     lastScrollY = window.scrollY;
     window.addEventListener("scroll", handleScroll, { passive: true });
-    window.addEventListener("resize", handleScroll); // برای تغییر سایز صفحه
+    window.addEventListener("resize", handleScroll);
   }
 });
 
@@ -648,6 +502,12 @@ onUnmounted(() => {
     window.removeEventListener("scroll", handleScroll);
     window.removeEventListener("resize", handleScroll);
   }
+
+  // cleanup timers + aborts
+  if (productsTimer) clearTimeout(productsTimer);
+  if (statsTimer) clearTimeout(statsTimer);
+  if (productsAbort) productsAbort.abort();
+  if (statsAbort) statsAbort.abort();
 });
 </script>
 
@@ -655,7 +515,9 @@ onUnmounted(() => {
   <div class="p-8">
     <div v-if="loading" class="text-center text-gray-500">در حال بارگذاری محصولات...</div>
 
-    <div v-else-if="!productStore.products || productStore.products.length === 0" class="text-center text-gray-500">محصولی برای نمایش وجود ندارد.</div>
+    <div v-else-if="shownProducts.length === 0" class="text-center text-gray-500">
+      {{ hasSearch ? "محصولی مطابق جستجو یافت نشد." : "محصولی با این فیلترها پیدا نشد." }}
+    </div>
 
     <div v-else class="grid grid-cols-12 gap-5 relative">
       <!-- ستون فیلترها -->
@@ -820,7 +682,8 @@ onUnmounted(() => {
             :key="product.id"
             :to="`/products/${product.id}`"
             class="card card-compact bg-base-100 shadow-lg hover:!shadow-3xl shadow-neutral-200 border-[1px] border-neutral-200 !rounded-lg transition-all duration-300 cursor-pointer group col-span-4 no-underline text-current relative overflow-hidden">
-            <div class="absolute top-0 right-0 w-1/4 h-1/4 border-t-[2px] border-r-[2px] border-yellow-500 rounded-tr-lg group-hover:rounded-lg rounded-bl-lg pointer-events-none z-10 transition-all duration-500 ease-out group-hover:w-full group-hover:h-full"></div>
+            <div
+              class="absolute top-0 right-0 w-1/4 h-1/4 border-t-[2px] border-r-[2px] border-yellow-500 rounded-tr-lg group-hover:rounded-lg rounded-bl-lg pointer-events-none z-10 transition-all duration-500 ease-out group-hover:w-full group-hover:h-full"></div>
             <figure class="h-[35vh] overflow-hidden relative rounded-t-lg">
               <img
                 :src="product.image_urls?.[0] || '/placeholder.png'"
@@ -849,7 +712,8 @@ onUnmounted(() => {
                 </span>
               </div>
             </div>
-            <div class="absolute bottom-0 left-0 w-1/4 h-1/4 border-b-[2px] border-l-[2px] border-yellow-500 rounded-bl-lg rounded-tr-lg group-hover:rounded-lg pointer-events-none z-10 transition-all duration-500 ease-out group-hover:w-full group-hover:h-full"></div>
+            <div
+              class="absolute bottom-0 left-0 w-1/4 h-1/4 border-b-[2px] border-l-[2px] border-yellow-500 rounded-bl-lg rounded-tr-lg group-hover:rounded-lg pointer-events-none z-10 transition-all duration-500 ease-out group-hover:w-full group-hover:h-full"></div>
           </NuxtLink>
         </div>
       </div>
