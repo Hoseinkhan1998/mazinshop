@@ -28,6 +28,7 @@ const isAdmin = computed(() => authStore.isAdmin);
 const quantity = ref(1);
 const productId = computed(() => Number(route.params.id));
 const selectedImageIndex = ref(0);
+const galleryOpen = ref(false);
 
 // انتخاب‌های کاربر برای اتریبیوت‌های متغیر
 const selectedOptions = ref<Record<string, string>>({});
@@ -387,13 +388,18 @@ const deleteComment = async (comment: CommentWithMeta) => {
       <v-alert type="error" prominent>{{ errorMessage }}</v-alert>
     </div>
     <div v-else-if="product">
-      <div class="grid grid-cols-12 px-4 lg:px-16 gap-y-12 lg:gap-x-16 py-8">
-        <div class="col-span-12 md:col-span-5 lg:col-span-5">
+      <div class="grid grid-cols-12 px-4 lg:px-16 gap-y-12 lg:gap-x-12 py-8 relative">
+        <!-- product image -->
+        <div class="col-span-4">
           <div class="sticky top-28 transition-all duration-300">
-            <div class="relative group overflow-hidden rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-500 border border-gray-100 bg-white">
-              <v-img :src="mainImageUrl" aspect-ratio="1" cover class="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700"></v-img>
+            <div class="relative group overflow-hidden rounded-2xl shadow-lg border border-gray-100 bg-white">
+              <v-carousel v-model="selectedImageIndex" hide-delimiters :show-arrows="thumbnailImages.length > 1 ? 'hover' : false" height="400" color="primary">
+                <v-carousel-item v-for="(imgUrl, index) in thumbnailImages" :key="index" :src="imgUrl" cover class="cursor-zoom-in" @click="galleryOpen = true"></v-carousel-item>
+              </v-carousel>
 
-              <div v-if="selectedVariant && selectedVariant.stock_quantity === 0" class="absolute inset-0 bg-white/60 flex items-center justify-center backdrop-blur-sm z-10">
+              <div
+                v-if="selectedVariant && selectedVariant.stock_quantity === 0"
+                class="absolute inset-0 bg-white/60 flex items-center justify-center backdrop-blur-sm z-20 pointer-events-none">
                 <span class="text-red-600 font-extrabold text-2xl border-4 border-red-600 px-6 py-2 rounded-lg -rotate-12 opacity-80">ناموجود</span>
               </div>
             </div>
@@ -414,106 +420,135 @@ const deleteComment = async (comment: CommentWithMeta) => {
             </div>
           </div>
         </div>
-
-        <div class="col-span-12 md:col-span-6 lg:col-span-6 flex flex-col">
+        <!-- product details-->
+        <div class="col-span-5 flex flex-col">
+          <!-- name & type -->
           <div class="pb-4">
             <div class="flex items-center gap-3 mb-3">
               <span v-if="productType" class="bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1 rounded-full"> دسته بندی: {{ productType.typename }} </span>
-              <span class="bg-gray-100 text-gray-500 text-xs font-mono px-2 py-1 rounded"> شناسه محصول: {{ product.product_code }} </span>
+              <span class="bg-gray-100 text-gray-500 text-xs font-mono px-2 py-1 rounded"> شناسه: {{ product.product_code }} </span>
             </div>
 
-            <h1 class="text-2xl lg:text-3xl font-semibold text-gray-900 leading-tight mb-4 tracking-tight">
+            <h1 class="text-xl font-semibold text-gray-900 leading-tight mb-6 tracking-tight">
               {{ product.title }}
             </h1>
           </div>
-
-          <div v-if="categorizedAttributes.fixed.length > 0" class="mb-8">
-            <h3 class="text-sm font-semibold text-gray-400 mb-3 uppercase tracking-wider">مشخصات فنی</h3>
-            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <div v-for="attribute in categorizedAttributes.fixed" :key="attribute.name" class="bg-gray-50 border border-gray-100 rounded-lg !p-1 flex flex-col">
-                <span class="text-xs text-gray-500 mb-1">{{ attribute.name }}</span>
-                <span class="text-sm font-bold text-gray-800 !ps-2">{{ attribute.value }}</span>
+          <!-- variable attributes -->
+          <div v-if="categorizedAttributes.variable.length > 0" class="!space-y-6 mb-8">
+            <div v-for="attribute in categorizedAttributes.variable" :key="attribute.id">
+              <h3 class="text-sm font-semibold text-gray-400 mb-3 uppercase tracking-wider">{{ attribute.name }}</h3>
+              <div class="flex flex-wrap gap-3 border-b-2 pb-2 border-gray-400 border-dashed">
+                <button
+                  v-for="val in Array.from(uniqueAttributeValues[attribute.name] || [])"
+                  :key="val"
+                  @click="
+                    selectedOptions[attribute.name] = val;
+                    handleOptionChange();
+                  "
+                  class="min-w-[3.5rem] px-4 py-1 text-sm !text-neutral-500 font-semibold border border-solid border-neutral-800 hover:scale-105 rounded-lg transition-all duration-200 flex items-center justify-center"
+                  :class="selectedOptions[attribute.name] === val ? 'mybg !text-white shadow-sm' : 'border-gray-100 text-white hover:border-gray-300 hover:bg-gray-100'">
+                  {{ val }}
+                </button>
               </div>
             </div>
           </div>
-
-          <div class="bg-white lg:bg-gray-50/50 rounded-2xl lg:p-6 mb-8">
-            <div v-if="categorizedAttributes.variable.length > 0" class="!space-y-5 mb-8">
-              <div v-for="attribute in categorizedAttributes.variable" :key="attribute.id">
-                <!-- <label class="text-sm font-bold text-gray-800 mb-2 block"> انتخاب {{ attribute.name }} </label> -->
-                <v-select
-                  v-model="selectedOptions[attribute.name]"
-                  :items="Array.from(uniqueAttributeValues[attribute.name] || [])"
-                  variant="outlined"
-                  density="comfortable"
-                  bg-color="white"
-                  :label="attribute.name"
-                  color="primary"
-                  rounded="lg"
-                  hide-details
-                  placeholder="انتخاب کنید..."
-                  @update:modelValue="handleOptionChange"></v-select>
+          <!-- attributes -->
+          <div v-if="categorizedAttributes.fixed.length > 0" class="mb-8">
+            <h3 class="font-semibold text-black mb-3 uppercase tracking-wider">مشخصات</h3>
+            <div class="flex flex-col gap-3">
+              <div
+                v-for="attribute in categorizedAttributes.fixed"
+                :key="attribute.name"
+                class="border-b-2 py-1 border-dashed border-gray-400 grid grid-cols-12 items-center justify-center">
+                <p class="text-gray-500 mb-1 col-span-4">{{ attribute.name }}:</p>
+                <p class="text-sm font-bold text-gray-800 col-span-8">{{ attribute.value }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- CTA -->
+        <div class="col-span-3 sticky top-32 z-20 self-start">
+          <div class="bg-gray-100 border border-gray-100 rounded-3xl !p-6 shadow-sm">
+            <!-- Status Area (Fixed height to prevent layout shift) -->
+            <div class="min-h-[28px] mb-4 flex flex-col justify-center">
+              <div
+                v-if="!addedToCart && selectedVariant && selectedVariant.stock_quantity < 10 && selectedVariant.stock_quantity > 0"
+                class="text-[10px] font-bold text-orange-600 flex items-center gap-1 animate-pulse">
+                <v-icon size="14" color="orange">mdi-fire</v-icon>
+                فقط {{ formatNumber(selectedVariant.stock_quantity) }} عدد در انبار باقیست
+              </div>
+              <div v-if="existingCartItemForSelectedVariant && existingCartItemForSelectedVariant.quantity > 0" class="text-[10px] font-bold text-blue-600 flex items-center gap-1">
+                <v-icon size="14" color="blue">mdi-cart-check</v-icon>
+                {{ formatNumber(existingCartItemForSelectedVariant.quantity) }} عدد در سبد خرید شماست
               </div>
             </div>
 
-            <div class="flex items-center justify-between w-full gap-2 mb-6 border-t border-dashed border-gray-300 pt-6">
-              <div class="flex flex-col items-start gap-2">
-                <div
-                  v-if="!addedToCart && selectedVariant && selectedVariant.stock_quantity < 10 && selectedVariant.stock_quantity > 0"
-                  class="bg-orange-100 text-orange-700 text-xs px-3 py-1 rounded-full font-bold animate-pulse">
-                  فقط {{ formatNumber(selectedVariant.stock_quantity) }} عدد باقیست
-                </div>
-
-                <div
-                  v-if="existingCartItemForSelectedVariant && existingCartItemForSelectedVariant.quantity > 0"
-                  class="bg-blue-100 text-blue-700 text-xs px-3 py-1 rounded-full font-bold">
-                  {{ formatNumber(existingCartItemForSelectedVariant.quantity) }} عدد از این محصول در سبد خرید شماست
-                </div>
-              </div>
-              <div class="">
-                <p class="text-4xl font-black text-gray-900 tracking-tight">
-                  <span v-if="currentPrice !== null"> {{ formatNumber(currentPrice) }} <span class="text-lg font-medium text-gray-500">تومان</span> </span>
-                  <span v-else-if="isInvalidCombination" class="text-red-500 text-2xl">ناموجود</span>
-                  <span v-else class="text-gray-400 text-xl">---</span>
-                </p>
+            <!-- price Section -->
+            <div class="flex items-end justify-between mb-6">
+              <!-- <span class="text-gray-400 text-xs font-medium">قیمت نهایی</span> -->
+              <div class="flex w-full justify-end items-baseline gap-1">
+                <template v-if="currentPrice !== null">
+                  <span class="text-2xl font-black text-gray-900 tracking-tighter">{{ formatNumber(currentPrice) }}</span>
+                  <span class="text-[10px] font-bold text-gray-500">تومان</span>
+                </template>
+                <span v-else-if="isInvalidCombination" class="text-red-500 text-lg font-bold">ناموجود</span>
+                <span v-else class="text-gray-200 text-xl tracking-widest">---</span>
               </div>
             </div>
 
-            <div v-if="!isInvalidCombination" class="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
-              <div class="flex items-center justify-between bg-white border border-gray-300 rounded-xl px-2 h-14 w-full sm:w-40 shrink-0">
-                <v-btn icon variant="text" size="small" color="grey" @click="decrement" :disabled="quantity <= 1">
-                  <v-icon>mdi-minus</v-icon>
-                </v-btn>
-                <span class="text-lg font-bold text-gray-800 select-none w-8 text-center">{{ formatNumber(quantity) }}</span>
+            <!-- Action Row -->
+            <div v-if="!isInvalidCombination" class="flex flex-col gap-3">
+              <div class="flex items-center gap-2">
+                <!-- Minimal Quantity Selector -->
+                <div class="flex items-center bg-gray-50 rounded-xl border border-gray-100 p-1">
+                  <v-btn icon variant="text" size="32" @click="decrement" :disabled="quantity <= 1">
+                    <v-icon size="18">mdi-minus</v-icon>
+                  </v-btn>
+                  <span class="w-8 text-center font-bold text-sm text-gray-700">{{ formatNumber(quantity) }}</span>
+                  <v-btn
+                    icon
+                    variant="text"
+                    size="32"
+                    color="primary"
+                    @click="increment"
+                    :disabled="!selectedVariant || (selectedVariant && quantity >= selectedVariant.stock_quantity)">
+                    <v-icon size="18">mdi-plus</v-icon>
+                  </v-btn>
+                </div>
+
+                <!-- Main CTA Button -->
                 <v-btn
-                  icon
-                  variant="text"
-                  size="small"
                   color="primary"
-                  @click="increment"
-                  :disabled="!selectedVariant || (selectedVariant && quantity >= selectedVariant.stock_quantity)">
-                  <v-icon>mdi-plus</v-icon>
+                  height="44"
+                  class="flex-1 !rounded-xl !text-xs !font-bold elevation-0 transition-all"
+                  :class="{ '!bg-green-600 !text-white': addedToCart }"
+                  :disabled="isPrimaryCtaDisabled"
+                  @click="handleAddToCart">
+                  <v-icon start size="18" class="me-1">{{ primaryCtaIcon }}</v-icon>
+                  {{ primaryCtaLabel }}
                 </v-btn>
               </div>
-
-              <v-btn
-                color="primary"
-                size="x-large"
-                class="flex-grow !h-14 !rounded-xl !text-lg !font-bold !shadow-lg hover:!shadow-xl transition-all"
-                :class="{ '!bg-green-600 !text-white': addedToCart }"
-                elevation="4"
-                :disabled="isPrimaryCtaDisabled"
-                :prepend-icon="primaryCtaIcon"
-                @click="handleAddToCart">
-                {{ primaryCtaLabel }}
-              </v-btn>
+              <div class="mt-4 !p-4 border border-dashed border-gray-200 rounded-xl flex items-center gap-3">
+                <v-icon size="20" color="grey-lighten-1">mdi-shield-check-outline</v-icon>
+                <span class="text-[11px] text-gray-500">ضمانت اصالت و سلامت فیزیکی کالا</span>
+              </div>
             </div>
 
-            <p v-if="!addedToCart && selectedVariant && selectedVariant.stock_quantity === 0" class="text-red-600 font-medium text-center mt-4 bg-red-50 p-2 rounded-lg">
-              متاسفانه موجودی این محصول به اتمام رسیده است.
+            <p v-if="!addedToCart && selectedVariant && selectedVariant.stock_quantity === 0" class="text-red-500 font-bold text-center mt-4 bg-red-50 py-2 rounded-xl text-[10px]">
+              موجودی این کالا به اتمام رسیده است
             </p>
           </div>
-
+        </div>
+      </div>
+      <!-- similar products -->
+      <div class="flex flex-col mt-5">
+        <p>محصولات مشابه:</p>
+        <div class="h-40"></div>
+      </div>
+      <!-- description & comments -->
+      <div class="grid grid-cols-12">
+        <div class="col-span-9 flex flex-col">
+          <!-- description -->
           <div class="mt-4">
             <h2 class="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
               <v-icon color="primary">mdi-text-box-outline</v-icon>
@@ -523,181 +558,212 @@ const deleteComment = async (comment: CommentWithMeta) => {
               {{ product.description || "توضیحاتی برای این محصول ارائه نشده است." }}
             </div>
           </div>
-        </div>
-      </div>
-
-      <section id="comments" class="mt-8 px-4 lg:px-16 pb-12">
-        <div class="rounded-2xl p-6 space-y-6">
-          <!-- هدر -->
-          <div class="flex items-center justify-between gap-3">
-            <div class="flex items-center gap-2">
-              <v-icon color="primary">mdi-message-text-outline</v-icon>
-              <h2 class="text-xl font-bold text-gray-900">نظرات کاربران</h2>
-            </div>
-            <span v-if="productComments.length" class="text-xs text-gray-500"> {{ formatNumber(productComments.length) }} نظر ثبت‌شده </span>
-          </div>
-
-          <!-- فرم ثبت نظر -->
-          <div class="rounded-xl p-4 bg-gray-50/60">
-            <div v-if="authStore.isLoggedIn" class="space-y-3">
-              <div v-if="replyingTo" class="flex items-center justify-between text-xs bg-blue-50 text-blue-800 px-3 py-2 rounded-lg mb-2">
-                <span>
-                  در حال پاسخ به نظر
-                  {{ replyingTo.user_full_name || "کاربر" }}
-                </span>
-                <button class="text-[11px] underline" @click="replyingTo = null">لغو پاسخ</button>
+          <section id="comments" class="mt-8 px-4 lg:px-16 pb-12">
+            <div class="rounded-2xl p-6 space-y-6">
+              <!-- هدر -->
+              <div class="flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2">
+                  <v-icon color="primary">mdi-message-text-outline</v-icon>
+                  <h2 class="text-xl font-bold text-gray-900">نظرات کاربران</h2>
+                </div>
+                <span v-if="productComments.length" class="text-xs text-gray-500"> {{ formatNumber(productComments.length) }} نظر ثبت‌شده </span>
               </div>
 
-              <v-textarea
-                v-model="newCommentText"
-                variant="outlined"
-                rows="3"
-                auto-grow
-                class="mt-4"
-                rounded="lg"
-                bg-color="white"
-                label="نظر یا پرسش خود را بنویسید..."
-                :counter="500"
-                maxlength="500" />
-
-              <div class="flex justify-between items-center gap-2">
-                <span class="text-[11px] text-gray-500"> نظر شما بعد از بررسی توسط ادمین نمایش داده خواهد شد. </span>
-                <v-btn color="primary" size="small" class="!rounded-lg" :disabled="!newCommentText.trim() || submittingComment" :loading="submittingComment" @click="submitComment">
-                  ثبت نظر
-                </v-btn>
-              </div>
-            </div>
-
-            <div v-else class="flex flex-col sm:flex-row items-center justify-between gap-3">
-              <p class="text-sm text-gray-600">برای ثبت نظر یا پرسش، ابتدا وارد حساب کاربری خود شوید.</p>
-              <v-btn color="primary" size="small" class="!rounded-lg" @click="loginDialog = true"> ورود / ثبت‌نام </v-btn>
-            </div>
-          </div>
-
-          <!-- لیست نظرات -->
-          <div v-if="productComments.length === 0" class="text-center text-gray-500 text-sm py-6">
-            <p>هنوز نظری برای این محصول ثبت نشده است.</p>
-            <p class="mt-1 text-xs">اولین نفری باشید که تجربه‌تان را به اشتراک می‌گذارید 🌟</p>
-          </div>
-
-          <div v-else class="divide-y divide-gray-100">
-            <!-- کامنت‌های والد -->
-            <div v-for="comment in topLevelComments" :key="comment.id" class="py-5">
-              <div class="rounded-2xl bg-white px-4 sm:px-5 py-4 shadow-sm border border-gray-100">
-                <!-- هدر -->
-                <div class="flex items-center justify-between gap-2 mb-2">
-                  <div class="flex items-center gap-2">
-                    <div class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
-                      <v-icon size="26" color="primary">mdi-account</v-icon>
-                    </div>
-
-                    <div class="flex flex-col">
-                      <span class="text-sm font-semibold text-gray-800">
-                        {{ comment.user_full_name || "کاربر MazinShop" }}
-                        <span v-if="authStore.user && authStore.user.id === comment.user_id" class="text-[11px] text-blue-500 ms-1"> (شما) </span>
-                      </span>
-                    </div>
+              <!-- فرم ثبت نظر -->
+              <div class="rounded-xl p-4 bg-gray-50/60">
+                <div v-if="authStore.isLoggedIn" class="space-y-3">
+                  <div v-if="replyingTo" class="flex items-center justify-between text-xs bg-blue-50 text-blue-800 px-3 py-2 rounded-lg mb-2">
+                    <span>
+                      در حال پاسخ به نظر
+                      {{ replyingTo.user_full_name || "کاربر" }}
+                    </span>
+                    <button class="text-[11px] underline" @click="replyingTo = null">لغو پاسخ</button>
                   </div>
 
-                  <div class="flex items-center gap-2 text-[11px] text-gray-500">
-                    <span class="text-gray-400 !text-sm">
-                      {{ formatDate(comment.created_at) }}
-                    </span>
-                    <v-btn v-if="canDeleteComment(comment)" icon variant="text" size="x-small" color="red" @click="deleteComment(comment)">
-                      <v-icon size="18">mdi-delete</v-icon>
-                      <v-tooltip class="!text-xs" activator="parent" location="bottom"><p class="text-xs">حذف نظر</p></v-tooltip>
+                  <v-textarea
+                    v-model="newCommentText"
+                    variant="outlined"
+                    rows="3"
+                    auto-grow
+                    class="mt-4"
+                    rounded="lg"
+                    bg-color="white"
+                    label="نظر یا پرسش خود را بنویسید..."
+                    :counter="500"
+                    maxlength="500" />
+
+                  <div class="flex justify-between items-center gap-2">
+                    <span class="text-[11px] text-gray-500"> نظر شما بعد از بررسی توسط ادمین نمایش داده خواهد شد. </span>
+                    <v-btn
+                      color="primary"
+                      size="small"
+                      class="!rounded-lg"
+                      :disabled="!newCommentText.trim() || submittingComment"
+                      :loading="submittingComment"
+                      @click="submitComment">
+                      ثبت نظر
                     </v-btn>
                   </div>
                 </div>
 
-                <!-- متن -->
-                <p class="text-sm text-gray-800 leading-relaxed whitespace-pre-line">
-                  {{ comment.content }}
-                </p>
-
-                <!-- اکشن‌ها -->
-                <div class="mt-3 flex items-center gap-3 text-xs">
-                  <button class="flex items-center gap-1 text-gray-500 hover:text-primary-600" @click="toggleLike(comment)">
-                    <v-icon size="18" :color="comment.my_vote === 1 ? 'primary' : undefined">
-                      {{ comment.my_vote === 1 ? "mdi-thumb-up" : "mdi-thumb-up-outline" }}
-                    </v-icon>
-                    <span>{{ formatNumber(comment.like_count) }}</span>
-                  </button>
-
-                  <button class="flex items-center gap-1 text-gray-500 hover:text-red-500" @click="toggleDislike(comment)">
-                    <v-icon size="18" :color="comment.my_vote === -1 ? 'red' : undefined">
-                      {{ comment.my_vote === -1 ? "mdi-thumb-down" : "mdi-thumb-down-outline" }}
-                    </v-icon>
-                    <span>{{ formatNumber(comment.dislike_count) }}</span>
-                  </button>
-
-                  <button class="flex items-center gap-1 text-gray-500 hover:text-primary" @click="startReply(comment)">
-                    <v-icon size="18">mdi-reply</v-icon>
-                    <span>پاسخ</span>
-                  </button>
+                <div v-else class="flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <p class="text-sm text-gray-600">برای ثبت نظر یا پرسش، ابتدا وارد حساب کاربری خود شوید.</p>
+                  <v-btn color="primary" size="small" class="!rounded-lg" @click="loginDialog = true"> ورود / ثبت‌نام </v-btn>
                 </div>
+              </div>
 
-                <!-- ریپلای‌ها -->
-                <div v-if="getReplies(comment.id).length" class="mt-4 ms-4 ps-4 border-s-2 border-gray-100 space-y-3">
-                  <div v-for="reply in getReplies(comment.id)" :key="reply.id" class="rounded-xl bg-gray-50 px-4 py-3 border border-gray-100">
-                    <div class="flex items-center justify-between gap-2 mb-1">
+              <!-- لیست نظرات -->
+              <div v-if="productComments.length === 0" class="text-center text-gray-500 text-sm py-6">
+                <p>هنوز نظری برای این محصول ثبت نشده است.</p>
+                <p class="mt-1 text-xs">اولین نفری باشید که تجربه‌تان را به اشتراک می‌گذارید 🌟</p>
+              </div>
+
+              <div v-else class="divide-y divide-gray-100">
+                <!-- کامنت‌های والد -->
+                <div v-for="comment in topLevelComments" :key="comment.id" class="py-5">
+                  <div class="rounded-2xl bg-white px-4 sm:px-5 py-4 shadow-sm border border-gray-100">
+                    <!-- هدر -->
+                    <div class="flex items-center justify-between gap-2 mb-2">
                       <div class="flex items-center gap-2">
                         <div class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
-                          <v-icon size="26" :color="isAdmin ? 'yellow-darken-3' : 'primary'">{{ isAdmin ? "mdi-crown" : "mdi-account" }}</v-icon>
+                          <v-icon size="26" color="primary">mdi-account</v-icon>
                         </div>
 
-                        <span class="text-xs font-semibold text-gray-800">
-                          {{ isAdmin ? "پاسخ ادمین" : reply.user_full_name || "کاربر MazinShop" }}
-                        </span>
+                        <div class="flex flex-col">
+                          <span class="text-sm font-semibold text-gray-800">
+                            {{ comment.user_full_name || "کاربر MazinShop" }}
+                            <span v-if="authStore.user && authStore.user.id === comment.user_id" class="text-[11px] text-blue-500 ms-1"> (شما) </span>
+                          </span>
+                        </div>
                       </div>
-                      <div class="flex items-center gap-2">
+
+                      <div class="flex items-center gap-2 text-[11px] text-gray-500">
                         <span class="text-gray-400 !text-sm">
-                          {{ formatDate(reply.created_at) }}
+                          {{ formatDate(comment.created_at) }}
                         </span>
-                        <v-btn v-if="canDeleteComment(reply)" icon variant="text" size="x-small" color="red" @click="deleteComment(reply)">
+                        <v-btn v-if="canDeleteComment(comment)" icon variant="text" size="x-small" color="red" @click="deleteComment(comment)">
                           <v-icon size="18">mdi-delete</v-icon>
                           <v-tooltip class="!text-xs" activator="parent" location="bottom"><p class="text-xs">حذف نظر</p></v-tooltip>
                         </v-btn>
                       </div>
                     </div>
-                    <p class="text-xs text-gray-800 whitespace-pre-line">
-                      {{ reply.content }}
+
+                    <!-- متن -->
+                    <p class="text-sm text-gray-800 leading-relaxed whitespace-pre-line">
+                      {{ comment.content }}
                     </p>
-                    <!-- اکشن‌های ریپلای: فقط لایک/دیس‌لایک -->
-                    <div class="mt-2 flex items-center gap-3 text-xs">
-                      <button class="flex items-center gap-1 text-gray-500 hover:text-primary-600" @click="toggleLike(reply)">
-                        <v-icon size="18" :color="reply.my_vote === 1 ? 'primary' : undefined">
-                          {{ reply.my_vote === 1 ? "mdi-thumb-up" : "mdi-thumb-up-outline" }}
+
+                    <!-- اکشن‌ها -->
+                    <div class="mt-3 flex items-center gap-3 text-xs">
+                      <button class="flex items-center gap-1 text-gray-500 hover:text-primary-600" @click="toggleLike(comment)">
+                        <v-icon size="18" :color="comment.my_vote === 1 ? 'primary' : undefined">
+                          {{ comment.my_vote === 1 ? "mdi-thumb-up" : "mdi-thumb-up-outline" }}
                         </v-icon>
-                        <span>{{ formatNumber(reply.like_count) }}</span>
+                        <span>{{ formatNumber(comment.like_count) }}</span>
                       </button>
 
-                      <button class="flex items-center gap-1 text-gray-500 hover:text-red-500" @click="toggleDislike(reply)">
-                        <v-icon size="18" :color="reply.my_vote === -1 ? 'red' : undefined">
-                          {{ reply.my_vote === -1 ? "mdi-thumb-down" : "mdi-thumb-down-outline" }}
+                      <button class="flex items-center gap-1 text-gray-500 hover:text-red-500" @click="toggleDislike(comment)">
+                        <v-icon size="18" :color="comment.my_vote === -1 ? 'red' : undefined">
+                          {{ comment.my_vote === -1 ? "mdi-thumb-down" : "mdi-thumb-down-outline" }}
                         </v-icon>
-                        <span>{{ formatNumber(reply.dislike_count) }}</span>
+                        <span>{{ formatNumber(comment.dislike_count) }}</span>
                       </button>
+
+                      <button class="flex items-center gap-1 text-gray-500 hover:text-primary" @click="startReply(comment)">
+                        <v-icon size="18">mdi-reply</v-icon>
+                        <span>پاسخ</span>
+                      </button>
+                    </div>
+
+                    <!-- ریپلای‌ها -->
+                    <div v-if="getReplies(comment.id).length" class="mt-4 ms-4 ps-4 border-s-2 border-gray-100 space-y-3">
+                      <div v-for="reply in getReplies(comment.id)" :key="reply.id" class="rounded-xl bg-gray-50 px-4 py-3 border border-gray-100">
+                        <div class="flex items-center justify-between gap-2 mb-1">
+                          <div class="flex items-center gap-2">
+                            <div class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center">
+                              <v-icon size="26" :color="isAdmin ? 'yellow-darken-3' : 'primary'">{{ isAdmin ? "mdi-crown" : "mdi-account" }}</v-icon>
+                            </div>
+
+                            <span class="text-xs font-semibold text-gray-800">
+                              {{ isAdmin ? "پاسخ ادمین" : reply.user_full_name || "کاربر MazinShop" }}
+                            </span>
+                          </div>
+                          <div class="flex items-center gap-2">
+                            <span class="text-gray-400 !text-sm">
+                              {{ formatDate(reply.created_at) }}
+                            </span>
+                            <v-btn v-if="canDeleteComment(reply)" icon variant="text" size="x-small" color="red" @click="deleteComment(reply)">
+                              <v-icon size="18">mdi-delete</v-icon>
+                              <v-tooltip class="!text-xs" activator="parent" location="bottom"><p class="text-xs">حذف نظر</p></v-tooltip>
+                            </v-btn>
+                          </div>
+                        </div>
+                        <p class="text-xs text-gray-800 whitespace-pre-line">
+                          {{ reply.content }}
+                        </p>
+                        <!-- اکشن‌های ریپلای: فقط لایک/دیس‌لایک -->
+                        <div class="mt-2 flex items-center gap-3 text-xs">
+                          <button class="flex items-center gap-1 text-gray-500 hover:text-primary-600" @click="toggleLike(reply)">
+                            <v-icon size="18" :color="reply.my_vote === 1 ? 'primary' : undefined">
+                              {{ reply.my_vote === 1 ? "mdi-thumb-up" : "mdi-thumb-up-outline" }}
+                            </v-icon>
+                            <span>{{ formatNumber(reply.like_count) }}</span>
+                          </button>
+
+                          <button class="flex items-center gap-1 text-gray-500 hover:text-red-500" @click="toggleDislike(reply)">
+                            <v-icon size="18" :color="reply.my_vote === -1 ? 'red' : undefined">
+                              {{ reply.my_vote === -1 ? "mdi-thumb-down" : "mdi-thumb-down-outline" }}
+                            </v-icon>
+                            <span>{{ formatNumber(reply.dislike_count) }}</span>
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+
+            <!-- دیالوگ لاگین -->
+            <v-dialog v-model="loginDialog" max-width="420">
+              <v-card>
+                <v-card-title class="text-base font-bold">ورود به حساب کاربری</v-card-title>
+                <v-card-text class="text-sm text-gray-600"> برای ثبت نظر و استفاده از امکانات کامل، لطفاً ابتدا وارد حساب کاربری خود شوید. </v-card-text>
+                <v-card-actions class="justify-end gap-2">
+                  <v-btn variant="text" size="small" @click="loginDialog = false">بستن</v-btn>
+                  <v-btn color="primary" size="small" @click="handleLoginRedirect"> رفتن به صفحه ورود </v-btn>
+                </v-card-actions>
+              </v-card>
+            </v-dialog>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fullscreen Gallery -->
+    <v-dialog v-model="galleryOpen" fullscreen transition="dialog-bottom-transition" class="z-[9999]">
+      <v-card class="!bg-black/80 h-full relative !rounded-none flex !px-5 flex-col">
+        <v-btn icon variant="text" class="absolute top-4 left-4 z-50 text-white !bg-black/100 hover:bg-black/40" @click="galleryOpen = false">
+          <v-icon size="32">mdi-close</v-icon>
+        </v-btn>
+
+        <div class="flex-1 flex items-center justify-center overflow-hidden">
+          <v-carousel v-model="selectedImageIndex" hide-delimiters :show-arrows="thumbnailImages.length > 1 ? 'hover' : false" height="100%" class="h-full w-full">
+            <v-carousel-item v-for="(imgUrl, index) in thumbnailImages" :key="index" :src="imgUrl" contain></v-carousel-item>
+          </v-carousel>
         </div>
 
-        <!-- دیالوگ لاگین -->
-        <v-dialog v-model="loginDialog" max-width="420">
-          <v-card>
-            <v-card-title class="text-base font-bold">ورود به حساب کاربری</v-card-title>
-            <v-card-text class="text-sm text-gray-600"> برای ثبت نظر و استفاده از امکانات کامل، لطفاً ابتدا وارد حساب کاربری خود شوید. </v-card-text>
-            <v-card-actions class="justify-end gap-2">
-              <v-btn variant="text" size="small" @click="loginDialog = false">بستن</v-btn>
-              <v-btn color="primary" size="small" @click="handleLoginRedirect"> رفتن به صفحه ورود </v-btn>
-            </v-card-actions>
-          </v-card>
-        </v-dialog>
-      </section>
-    </div>
+        <div v-if="thumbnailImages.length > 1" class="h-24 flex items-center justify-center gap-3 pb-6 px-4 overflow-x-auto">
+          <div
+            v-for="(imgUrl, index) in thumbnailImages"
+            :key="index"
+            class="w-16 h-16 rounded-lg overflow-hidden border-2 cursor-pointer transition-all shrink-0"
+            :class="selectedImageIndex === index ? 'border-primary opacity-100 scale-110' : 'border-gray-600 opacity-60 hover:opacity-100'"
+            @click="selectedImageIndex = index">
+            <v-img :src="imgUrl" cover class="w-full h-full"></v-img>
+          </div>
+        </div>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
