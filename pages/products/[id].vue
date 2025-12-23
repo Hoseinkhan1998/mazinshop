@@ -10,6 +10,7 @@ import { useCartStore } from "~/stores/cart";
 import type { CartItem } from "~/stores/cart";
 import { useAuthStore } from "~/stores/auth";
 import { useCommentsStore, type CommentWithMeta } from "~/stores/comments";
+import SimilarProducts from "~/components/SimilarProducts.vue";
 
 const cartStore = useCartStore();
 const router = useRouter();
@@ -541,12 +542,10 @@ const deleteComment = async (comment: CommentWithMeta) => {
         </div>
       </div>
       <!-- similar products -->
-      <div class="flex flex-col mt-5">
-        <p>محصولات مشابه:</p>
-        <div class="h-40"></div>
-      </div>
+      <SimilarProducts v-if="product" :product="product" />
+
       <!-- description & comments -->
-      <div class="grid grid-cols-12">
+      <div class="grid grid-cols-12 gap-x-10 relative">
         <div class="col-span-9 flex flex-col">
           <!-- description -->
           <div class="mt-4">
@@ -736,6 +735,83 @@ const deleteComment = async (comment: CommentWithMeta) => {
               </v-card>
             </v-dialog>
           </section>
+        </div>
+        <!-- CTA -->
+        <div class="col-span-3 mt-10 sticky top-32 z-20 self-start">
+          <div class="bg-gray-100 border border-gray-100 rounded-3xl !p-6 shadow-sm">
+            <h1 class="text-xl font-semibold text-gray-900 leading-tight mb-6 tracking-tight">
+              {{ product.title }}
+            </h1>
+            <!-- price Section -->
+            <div class="flex items-end justify-between mb-6">
+              <!-- <span class="text-gray-400 text-xs font-medium">قیمت نهایی</span> -->
+              <div class="flex w-full justify-end items-baseline gap-1">
+                <template v-if="currentPrice !== null">
+                  <span class="text-2xl font-black text-gray-900 tracking-tighter">{{ formatNumber(currentPrice) }}</span>
+                  <span class="text-[10px] font-bold text-gray-500">تومان</span>
+                </template>
+                <span v-else-if="isInvalidCombination" class="text-red-500 text-lg font-bold">ناموجود</span>
+                <span v-else class="text-gray-200 text-xl tracking-widest">---</span>
+              </div>
+            </div>
+
+            <!-- Action Row -->
+            <div v-if="!isInvalidCombination" class="flex flex-col gap-3">
+              <div class="flex items-center gap-2">
+                <!-- Minimal Quantity Selector -->
+                <div class="flex items-center bg-gray-50 rounded-xl border border-gray-100 p-1">
+                  <v-btn icon variant="text" size="32" @click="decrement" :disabled="quantity <= 1">
+                    <v-icon size="18">mdi-minus</v-icon>
+                  </v-btn>
+                  <span class="w-8 text-center font-bold text-sm text-gray-700">{{ formatNumber(quantity) }}</span>
+                  <v-btn
+                    icon
+                    variant="text"
+                    size="32"
+                    color="primary"
+                    @click="increment"
+                    :disabled="!selectedVariant || (selectedVariant && quantity >= selectedVariant.stock_quantity)">
+                    <v-icon size="18">mdi-plus</v-icon>
+                  </v-btn>
+                </div>
+
+                <!-- Main CTA Button -->
+                <v-btn
+                  color="primary"
+                  height="44"
+                  class="flex-1 !rounded-xl !text-xs !font-bold elevation-0 transition-all"
+                  :class="{ '!bg-green-600 !text-white': addedToCart }"
+                  :disabled="isPrimaryCtaDisabled"
+                  @click="handleAddToCart">
+                  <v-icon start size="18" class="me-1">{{ primaryCtaIcon }}</v-icon>
+                  {{ primaryCtaLabel }}
+                </v-btn>
+              </div>
+              <!-- Status Area (Fixed height to prevent layout shift) -->
+              <div class="min-h-[28px] mb-4 flex flex-col justify-center">
+                <div
+                  v-if="!addedToCart && selectedVariant && selectedVariant.stock_quantity < 10 && selectedVariant.stock_quantity > 0"
+                  class="text-[10px] font-bold text-orange-600 flex items-center gap-1 animate-pulse">
+                  <v-icon size="14" color="orange">mdi-fire</v-icon>
+                  فقط {{ formatNumber(selectedVariant.stock_quantity) }} عدد در انبار باقیست
+                </div>
+                <div
+                  v-if="existingCartItemForSelectedVariant && existingCartItemForSelectedVariant.quantity > 0"
+                  class="text-[10px] font-bold text-blue-600 flex items-center gap-1">
+                  <v-icon size="14" color="blue">mdi-cart-check</v-icon>
+                  {{ formatNumber(existingCartItemForSelectedVariant.quantity) }} عدد در سبد خرید شماست
+                </div>
+              </div>
+              <div class="!p-4 border border-dashed border-gray-200 rounded-xl flex items-center gap-3">
+                <v-icon size="20" color="grey-lighten-1">mdi-shield-check-outline</v-icon>
+                <span class="text-[11px] text-gray-500">ضمانت اصالت و سلامت فیزیکی کالا</span>
+              </div>
+            </div>
+
+            <p v-if="!addedToCart && selectedVariant && selectedVariant.stock_quantity === 0" class="text-red-500 font-bold text-center mt-4 bg-red-50 py-2 rounded-xl text-[10px]">
+              موجودی این کالا به اتمام رسیده است
+            </p>
+          </div>
         </div>
       </div>
     </div>

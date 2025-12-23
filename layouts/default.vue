@@ -92,7 +92,7 @@ onMounted(async () => {
 
 <template>
   <v-app>
-    <div class="relative h-full">
+    <div class="relative min-h-screen flex flex-col">
       <header v-if="route.path !== '/login' && route.path !== '/information'" class="backdrop-blur-2xl sticky top-0 z-30">
         <nav class="container mx-auto px-10 py-4 grid grid-cols-12 items-center">
           <ClientOnly class="col-span-9">
@@ -187,7 +187,7 @@ onMounted(async () => {
         </nav>
       </header>
 
-      <main class="" :class="{ 'mx-auto px-6 py-8': route.path !== '/login' && route.path !== '/information' }">
+      <main class="flex-1" :class="{ 'mx-auto px-6 py-8': route.path !== '/login' && route.path !== '/information' }">
         <slot />
       </main>
 
@@ -201,10 +201,113 @@ onMounted(async () => {
         </div>
       </Transition>
 
+      <footer v-if="route.path !== '/login'" class="bg-neutral-900 text-white pt-16 pb-8 mt-auto relative z-20">
+        <div class="container mx-auto px-10">
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
+            <!-- ستون ۱: درباره ما -->
+            <div>
+              <div class="flex items-center gap-2 mb-4">
+                <img src="/images/logo.png" class="h-10 w-auto brightness-0 invert opacity-80" alt="Logo" />
+                <h3 class="text-lg font-bold text-white">علی‌شاپ</h3>
+              </div>
+              <p class="text-gray-400 text-sm leading-7 text-justify">
+                فروشگاه اینترنتی علی‌شاپ با هدف ارائه محصولات باکیفیت و تجربه خریدی آسان و مطمئن راه‌اندازی شده است. ما بر این باوریم که مشتریان لایق بهترین‌ها هستند و تمام تلاش خود را برای جلب رضایت شما به کار می‌گیریم.
+              </p>
+            </div>
+
+            <!-- ستون ۲: دسترسی سریع و دسته‌بندی‌ها -->
+            <div>
+              <h3 class="text-lg font-bold mb-4 text-white">دسترسی سریع</h3>
+              <div class="flex flex-col gap-2 text-sm text-gray-400">
+                <NuxtLink to="/" class="hover:text-primary transition-colors">صفحه اصلی</NuxtLink>
+                <NuxtLink to="/products" class="hover:text-primary transition-colors">محصولات</NuxtLink>
+                <NuxtLink to="/information" class="hover:text-primary transition-colors">حساب کاربری</NuxtLink>
+                
+                <!-- دسته‌بندی‌ها -->
+                <template v-if="visibleTypes.length > 0">
+                  <div class="mt-4 mb-2 font-semibold text-white text-xs">دسته‌بندی‌های محبوب</div>
+                  <NuxtLink 
+                    v-for="type in visibleTypes.slice(0, 4)" 
+                    :key="type.id" 
+                    :to="`/products?type=${type.id}`" 
+                    class="hover:text-primary transition-colors">
+                    {{ type.typename }}
+                  </NuxtLink>
+                </template>
+              </div>
+            </div>
+
+            <!-- ستون ۳: اطلاعات تماس -->
+            <div>
+              <h3 class="text-lg font-bold mb-4 text-white">ارتباط با ما</h3>
+              <ul class="space-y-4 text-sm text-gray-400">
+                <li>
+                  <a href="tel:09358203460" class="flex items-center gap-3 hover:text-white transition-colors group">
+                    <div class="bg-neutral-800 p-2 rounded-full group-hover:bg-primary transition-colors">
+                      <v-icon size="small" color="white">mdi-phone</v-icon>
+                    </div>
+                    <span dir="ltr">0935 820 3460</span>
+                  </a>
+                </li>
+                <li>
+                  <a href="https://wa.me/989358203460" target="_blank" class="flex items-center gap-3 hover:text-white transition-colors group">
+                    <div class="bg-neutral-800 p-2 rounded-full group-hover:bg-green-600 transition-colors">
+                      <v-icon size="small" color="white">mdi-whatsapp</v-icon>
+                    </div>
+                    <span>واتساپ پشتیبانی</span>
+                  </a>
+                </li>
+                <li>
+                  <a href="mailto:info@alishop.ir" class="flex items-center gap-3 hover:text-white transition-colors group">
+                    <div class="bg-neutral-800 p-2 rounded-full group-hover:bg-primary transition-colors">
+                      <v-icon size="small" color="white">mdi-email</v-icon>
+                    </div>
+                    <span>info@alishop.ir</span>
+                  </a>
+                </li>
+                <li class="flex items-start gap-3">
+                   <div class="bg-neutral-800 p-2 rounded-full mt-1">
+                      <v-icon size="small" color="white">mdi-map-marker</v-icon>
+                   </div>
+                   <span class="mt-2">تهران، میدان آزادی، خیابان آزادی، پلاک ۱۱۰</span>
+                </li>
+              </ul>
+            </div>
+
+            <!-- ستون ۴: نماد اعتماد -->
+            <div>
+              <h3 class="text-lg font-bold mb-4 text-white">نمادهای اعتماد</h3>
+              <div class="flex flex-wrap gap-4">
+                  <div class="bg-white/10 rounded-xl p-2 w-20 h-20 flex items-center justify-center cursor-pointer hover:bg-white/20 transition-all">
+                      <v-icon size="40" color="grey-lighten-1">mdi-shield-check</v-icon>
+                  </div>
+                  <div class="bg-white/10 rounded-xl p-2 w-20 h-20 flex items-center justify-center cursor-pointer hover:bg-white/20 transition-all">
+                      <v-icon size="40" color="grey-lighten-1">mdi-certificate</v-icon>
+                  </div>
+              </div>
+              <p class="text-xs text-gray-500 mt-4">
+                با اطمینان خرید کنید. پرداخت امن و ارسال سریع تضمین شده است.
+              </p>
+            </div>
+          </div>
+          
+          <v-divider class="border-neutral-800 mb-6"></v-divider>
+          
+          <div class="flex flex-col md:flex-row justify-between items-center text-xs text-gray-500 pb-4">
+            <p>تمامی حقوق مادی و معنوی این وب‌سایت محفوظ است.</p>
+            <div class="flex gap-4 mt-4 md:mt-0">
+               <v-btn icon variant="text" size="small" color="grey" class="hover:!text-white"><v-icon>mdi-instagram</v-icon></v-btn>
+               <v-btn icon variant="text" size="small" color="grey" class="hover:!text-white"><v-icon>mdi-twitter</v-icon></v-btn>
+               <v-btn icon variant="text" size="small" color="grey" class="hover:!text-white"><v-icon>mdi-linkedin</v-icon></v-btn>
+            </div>
+          </div>
+        </div>
+      </footer>
+
       <ClientOnly>
         <v-menu v-if="isAdmin" location="top">
           <template v-slot:activator="{ props }">
-            <v-btn v-bind="props" icon="mdi-plus" size="large" color="primary" position="fixed" location="bottom left" class="ma-4"></v-btn>
+            <v-btn v-bind="props" icon="mdi-plus" size="large" color="primary" position="fixed" location="bottom left" class="ma-4 z-30"></v-btn>
           </template>
 
           <v-list>
