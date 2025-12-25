@@ -5,6 +5,7 @@ import axios from "axios";
 import { useAuthStore } from "~/stores/auth";
 import { useCartStore } from "~/stores/cart";
 import { useToast } from "~/composables/useToast";
+import { useGlobalLoading } from "~/composables/useGlobalLoading";
 
 definePageMeta({
   middleware: "authenticated",
@@ -15,6 +16,11 @@ const authStore = useAuthStore();
 const cartStore = useCartStore();
 const router = useRouter();
 const { trigger: showToast } = useToast();
+
+const { setGlobalLoading } = useGlobalLoading();
+const firstLoadDone = ref(false);
+setGlobalLoading(true);
+
 const confirmDeleteOpen = ref(false);
 const addressIdToDelete = ref<number | null>(null);
 
@@ -69,6 +75,7 @@ const phoneRules = [(v: string) => !!v || "شماره موبایل الزامی 
 const postalCodeRules = [(v: string) => !!v || "کد پستی الزامی است", (v: string) => v.length === 10 || "کد پستی باید 10 رقم باشد"];
 
 const loadAddresses = async () => {
+  setGlobalLoading(true);
   loading.value = true;
   try {
     const {
@@ -101,6 +108,8 @@ const loadAddresses = async () => {
     mode.value = "create";
   } finally {
     loading.value = false;
+    firstLoadDone.value = true;
+    setGlobalLoading(false);
   }
 };
 
@@ -320,12 +329,11 @@ const confirmAndPay = () => {
 <template>
   <div class="container mx-auto px-4 py-8">
     <h1  class="text-2xl md:text-3xl font-bold mb-6">اطلاعات ارسال و فاکتور</h1>
-    <div v-if="loading" class="text-center py-10">
-      <v-progress-circular indeterminate color="primary"></v-progress-circular>
-      <p class="mt-2">در حال دریافت اطلاعات...</p>
+    <div v-if="!firstLoadDone" class="w-full h-[60vh] flex items-center justify-center">
+      <AppLoader />
     </div>
 
-    <div v-else class="grid grid-cols-12 gap-6">
+    <div v-else-if="firstLoadDone" class="grid grid-cols-12 gap-6">
       <!-- راست: آدرس/فرم -->      
       <div class="col-span-6">
         <!-- حالت انتخاب آدرس‌های موجود -->

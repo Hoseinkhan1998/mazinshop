@@ -5,6 +5,7 @@ import axios from "axios";
 import { useAuthStore } from "~/stores/auth";
 import { useCartStore } from "~/stores/cart";
 import { useToast } from "~/composables/useToast";
+import { useGlobalLoading } from "~/composables/useGlobalLoading";
 
 definePageMeta({
   middleware: "authenticated",
@@ -15,6 +16,11 @@ const authStore = useAuthStore();
 const cartStore = useCartStore();
 const router = useRouter();
 const { trigger: showToast } = useToast();
+
+const { setGlobalLoading } = useGlobalLoading();
+const firstLoadDone = ref(false);
+setGlobalLoading(true);
+
 const confirmDeleteOpen = ref(false);
 const personalFullName = ref(authStore.profile?.full_name || "");
 const personalPhone = ref<string>("");
@@ -96,6 +102,7 @@ const personalNameRules = [
 ];
 
 const loadAddresses = async () => {
+  setGlobalLoading(true);
   loading.value = true;
   try {
     const {
@@ -125,6 +132,8 @@ const loadAddresses = async () => {
     mode.value = "create";
   } finally {
     loading.value = false;
+    firstLoadDone.value = true;
+    setGlobalLoading(false);
   }
 };
 
@@ -496,7 +505,11 @@ const deleteAddress = async () => {
 </script>
 
 <template>
-  <ClientOnly>
+  <div v-if="!firstLoadDone" class="w-full h-[80vh] flex items-center justify-center">
+    <AppLoader />
+  </div>
+
+  <ClientOnly v-else-if="firstLoadDone">
     <div class="grid relative grid-cols-1 lg:grid-cols-2">
       <div class="flex flex-col px-4 relative w-full">
         <div class="absolute top-5 right-5">

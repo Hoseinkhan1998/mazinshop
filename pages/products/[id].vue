@@ -11,6 +11,7 @@ import type { CartItem } from "~/stores/cart";
 import { useAuthStore } from "~/stores/auth";
 import { useCommentsStore, type CommentWithMeta } from "~/stores/comments";
 import SimilarProducts from "~/components/SimilarProducts.vue";
+import { useGlobalLoading } from "~/composables/useGlobalLoading";
 
 const cartStore = useCartStore();
 const router = useRouter();
@@ -21,6 +22,12 @@ const { trigger: showToast } = useToast();
 const route = useRoute();
 const productStore = useProductStore();
 const typesStore = useTypesStore();
+
+const { setGlobalLoading } = useGlobalLoading();
+const firstLoadDone = ref(false);
+
+// فعال‌سازی لودینگ بلافاصله در لحظه ستاپ (برای رفرش)
+setGlobalLoading(true);
 
 const loading = ref(true);
 const errorMessage = ref<string | null>(null);
@@ -74,11 +81,19 @@ const startReply = (comment: CommentWithMeta) => {
   replyingTo.value = comment;
   const el = document.getElementById("comments");
   if (el) {
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    const offset = 130; // مقدار فاصله برای جبران ارتفاع هدر و دیده شدن کامل باکس
+    const elementPosition = el.getBoundingClientRect().top;
+    const offsetPosition = elementPosition + window.scrollY - offset;
+
+    window.scrollTo({
+      top: offsetPosition,
+      behavior: "smooth",
+    });
   }
 };
 
 async function fetchDetails() {
+  setGlobalLoading(true);
   loading.value = true;
   errorMessage.value = null;
   selectedImageIndex.value = 0;
@@ -118,6 +133,8 @@ async function fetchDetails() {
     console.error(err);
   } finally {
     loading.value = false;
+    firstLoadDone.value = true;
+    setGlobalLoading(false);
   }
 }
 
@@ -380,9 +397,8 @@ const deleteComment = async (comment: CommentWithMeta) => {
 
 <template>
   <div>
-    <div v-if="loading" class="text-center py-10">
-      <v-progress-circular indeterminate color="primary"></v-progress-circular>
-      <p>در حال بارگذاری اطلاعات محصول...</p>
+    <div v-if="!firstLoadDone" class="w-full h-[80vh] flex items-center justify-center">
+      <AppLoader />
     </div>
 
     <div v-else-if="errorMessage" class="text-center py-10 text-red-500">
@@ -811,6 +827,33 @@ const deleteComment = async (comment: CommentWithMeta) => {
             <p v-if="!addedToCart && selectedVariant && selectedVariant.stock_quantity === 0" class="text-red-500 font-bold text-center mt-4 bg-red-50 py-2 rounded-xl text-[10px]">
               موجودی این کالا به اتمام رسیده است
             </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Trust Badges -->
+      <div class="mt-12 border-t border-gray-100 pt-10 pb-6 px-4 lg:px-16">
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-8">
+          <div class="flex flex-col items-center text-center gap-3 group">
+            <v-icon size="40" color="grey-darken-1" class="group-hover:text-primary transition-colors">mdi-shield-star-outline</v-icon>
+            <span class="text-xs font-bold text-gray-700">ضمانت سالم بودن کالا</span>
+          </div>
+          <div class="flex flex-col items-center text-center gap-3 group">
+            <v-icon size="40" color="grey-darken-1" class="group-hover:text-primary transition-colors">mdi-tag-heart-outline</v-icon>
+            <span class="text-xs font-bold text-gray-700">تضمین بهترین قیمت</span>
+          </div>
+          <div class="flex flex-col items-center text-center gap-3 group">
+            <v-icon size="40" color="grey-darken-1" class="group-hover:text-primary transition-colors">mdi-truck-fast-outline</v-icon>
+            <span class="text-xs font-bold text-gray-700">ارسال سریع و اکسپرس</span>
+          </div>
+
+          <div class="flex flex-col items-center text-center gap-3 group">
+            <v-icon size="40" color="grey-darken-1" class="group-hover:text-primary transition-colors">mdi-history</v-icon>
+            <span class="text-xs font-bold text-gray-700">۷ روز ضمانت بازگشت</span>
+          </div>
+          <div class="flex flex-col items-center text-center gap-3 group">
+            <v-icon size="40" color="grey-darken-1" class="group-hover:text-primary transition-colors">mdi-credit-card-outline</v-icon>
+            <span class="text-xs font-bold text-gray-700">امکان پرداخت در محل</span>
           </div>
         </div>
       </div>

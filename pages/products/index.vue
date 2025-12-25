@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { Product } from "~/types/Product";
 import { useTypesStore } from "~/stores/types";
+import { useGlobalLoading } from "~/composables/useGlobalLoading";
 
 type SortMode = "newest" | "priceAsc" | "priceDesc" | null;
 
@@ -10,7 +11,9 @@ const typesStore = useTypesStore();
 const route = useRoute();
 const router = useRouter();
 
-const loading = ref(true); // لود اولیه صفحه (types + options + اولین fetch)
+const { isGlobalLoading, setGlobalLoading } = useGlobalLoading();
+const firstLoadDone = ref(false);
+setGlobalLoading(true);
 const productsLoading = ref(false); // لود محصولات از API
 const statsLoading = ref(false); // لود min/max قیمت از API
 
@@ -436,6 +439,7 @@ watch(
 
 // ---------- Initial load ----------
 onMounted(async () => {
+  setGlobalLoading(true);
   await ensureTypesLoaded();
 
   // اگر نه سرچ داریم و نه type ⇒ برو روی اولین type
@@ -450,8 +454,8 @@ onMounted(async () => {
 
   // اولین fetch (بدون debounce)
   await Promise.all([fetchPriceStatsFromApi(), fetchProductsFromApi()]);
-
-  loading.value = false;
+  firstLoadDone.value = true;
+  setGlobalLoading(false);
 });
 
 // ---------- Smart Sticky Sidebar Logic ----------
@@ -513,7 +517,9 @@ onUnmounted(() => {
 
 <template>
   <div class="p-8">
-    <div v-if="loading" class="text-center text-gray-500">در حال بارگذاری محصولات...</div>
+    <div v-if="!firstLoadDone" class="w-full h-[80vh] flex items-center justify-center">
+      <AppLoader />
+    </div>
 
     <div v-else-if="shownProducts.length === 0" class="text-center text-gray-500">
       {{ hasSearch ? "محصولی مطابق جستجو یافت نشد." : "محصولی با این فیلترها پیدا نشد." }}
@@ -672,12 +678,7 @@ onUnmounted(() => {
             <span v-if="currentType"> ({{ currentType.typename }})</span>
           </h1>
 
-          <div v-if="shownProducts.length === 0" class="col-span-full text-gray-500">
-            {{ hasSearch ? "محصولی مطابق جستجو یافت نشد." : "محصولی با این فیلترها پیدا نشد." }}
-          </div>
-
-          <NuxtLink
-            v-else
+          <NuxtLink            
             v-for="product in shownProducts"
             :key="product.id"
             :to="`/products/${product.id}`"

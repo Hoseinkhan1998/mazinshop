@@ -76,65 +76,101 @@ const verifyCode = async () => {
 
 <template>
   <ClientOnly>
-    <div class="grid grid-cols-1 lg:grid-cols-2">
-      <div class="flex relative h-screen justify-center items-center">
-        <div class="absolute top-5 right-5">
+    <div class="grid grid-cols-1 lg:grid-cols-2 overflow-hidden h-screen">
+      <div class="flex relative justify-center items-center h-full bg-white">
+        <div class="absolute top-5 right-5 z-20">
           <router-link
             to="/"
-            class="cursor-pointer flex items-center justify-center rounded-lg px-4 py-1 gap-2 border-2 hover:!bg-[#6d5842d2] lg:!text-black hover:!text-white text-white transition-all duration-150 border-neutral-400">
-            <v-icon class="">mdi-arrow-right-bold-circle-outline</v-icon>
-            <p>بازگشت</p>
+            class="cursor-pointer flex items-center justify-center !rounded-2xl px-5 py-2 gap-2 mybg border border-stone-200 hover:bg-stone-100 transition-all duration-300 text-stone-700">
+            <v-icon size="18">mdi-arrow-right</v-icon>
+            <p class="text-xs font-bold">بازگشت به خانه</p>
           </router-link>
         </div>
-        <!-- login box -->
-        <div class="flex flex-col justify-center items-center w-full h-full">
 
-          <div class="flex w-full h-full justify-center items-center lg:bg-[url()] px-3 bg-center bg-[url(/images/login1.png)]">
-            <div class="!p-8 !rounded-xl border shadow-lg lg:text-black bg-white/60 backdrop-blur-lg w-[60vh]">
-              <h2 class="text-2xl font-bold text-center mb-6 ">ورود / ثبت‌نام</h2>
+        <div class="flex flex-col justify-center items-center w-full h-full px-4 lg:bg-none bg-center bg-no-repeat relative">
+          <img src="/images/login1.png" class="lg:hidden absolute inset-0 w-full h-full object-cover opacity-20" alt="" />
 
-              <div v-if="step === 'enter-phone'">
-                <div class="mb-4">
-                  <v-text-field
-                    density="compact"
-                    rounded="lg"
-                    type="number"
-                    hide-spin-buttons
-                    v-model="phone"
-                    label="شماره موبایل (مثال: 09123456789)"
-                    variant="outlined"
-                    class=""                    
-                    required />
-                </div>
-                <div class="mb-6">
-                  <v-text-field class=" " density="compact" rounded="lg" v-model="fullName" label="نام و نام خانوادگی (اختیاری)" variant="outlined" />
-                </div>
+          <div class="login-glass-card !p-10 !rounded-3xl w-full max-w-[450px] z-10">
+            <div class="text-center mb-8">
+              <!-- <p class="text-stone-500 text-sm font-medium mb-1">خوش آمدید!</p> -->
+              <h2 class="text-xl font-bold text-stone-800">به<span class="mazin-logo-text text-3xl mx-1">مزین شاپ</span> خوش آمدید</h2>
+            </div>
 
-                <p v-if="errorMessage" class="text-red-500 mb-4 text-sm">{{ errorMessage }}</p>
-
-                <v-btn class="group" :loading="loading" color="primarymain" block @click="sendCode">
-                  <v-icon class="!-mr-10 mb-1 opacity-0 group-hover:!opacity-100 transition-all duration-300 -rotate-45">mdi-send</v-icon>
-                  <p class="mr-5">ارسال کد تایید</p>
-                </v-btn>
+            <div v-if="step === 'enter-phone'">
+              <div class="mb-4">
+                <v-text-field
+                  density="comfortable"
+                  rounded="lg"
+                  type="number"
+                  hide-spin-buttons
+                  v-model="phone"
+                  label="شماره موبایل"
+                  placeholder="09123456789"
+                  variant="outlined"
+                  color="#6d5842"
+                  required />
               </div>
 
-              <div v-else>
-                <div class="mb-4">
-                  <v-text-field density="compact" rounded="lg" v-model="otp" label="کد تایید" variant="outlined" required />
-                </div>
+              <p v-if="errorMessage" class="text-red-500 mb-4 text-xs text-center font-bold">{{ errorMessage }}</p>
 
-                <p v-if="errorMessage" class="text-red-500 mb-4 text-sm">{{ errorMessage }}</p>
+              <v-btn class="group !rounded-xl" :loading="loading" color="primarymain" block height="48" @click="sendCode">
+                <span class="font-bold">ارسال کد تایید</span>
+                <v-icon class="ms-2 opacity-0 group-hover:opacity-100 transition-all duration-300" size="18">mdi-chevron-left</v-icon>
+              </v-btn>
+            </div>
 
-                <v-btn :loading="loading" color="primary" block @click="verifyCode">تایید و ورود</v-btn>
-                <v-btn variant="text" block class="mt-2" @click="step = 'enter-phone'">ویرایش شماره</v-btn>
+            <div v-else>
+              <div class="mb-4">
+                <v-text-field density="comfortable" rounded="lg" v-model="otp" label="کد تایید پیامک شده" variant="outlined" color="#6d5842" required />
               </div>
+
+              <p v-if="errorMessage" class="text-red-500 mb-4 text-xs text-center font-bold">{{ errorMessage }}</p>
+
+              <v-btn :loading="loading" color="primarymain" block height="48" class="!rounded-xl font-bold" @click="verifyCode">تایید و ورود</v-btn>
+              <v-btn variant="text" block class="mt-4 !text-stone-500 !text-xs" @click="step = 'enter-phone'">ویرایش شماره موبایل</v-btn>
             </div>
           </div>
         </div>
       </div>
-      <div class="hidden lg:block h-screen">
-        <img src="/public/images/login2.png" class="h-full w-[1000px]" alt="" />
+
+      <div class="hidden lg:block h-screen relative overflow-hidden">
+        <img src="/public/images/login2.png" class="h-full w-full object-cover object-center scale-105" alt="MazinShop Login" />
+        <div class="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent"></div>
       </div>
     </div>
   </ClientOnly>
 </template>
+
+<style scoped>
+/* انیمیشن برای حرکت رنگ‌ها در متن */
+@keyframes rgb-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.mazin-logo-text {
+  /* گرادینت رنگی هماهنگ با تم سایت شما (طلایی، قهوه‌ای روشن، نارنجی ملایم) */
+  background: linear-gradient(90deg, #6d5842, #b3a08a, #d4af37, #6d5842);
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  display: inline-block;
+  font-weight: 900;
+  animation: rgb-flow 4s ease infinite;
+}
+
+.login-glass-card {
+  background: rgba(255, 255, 255, 0.75) !important;
+  backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(109, 88, 66, 0.2) !important;
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1) !important;
+}
+</style>

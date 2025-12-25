@@ -8,6 +8,7 @@ import TypeManager from "~/components/TypeManager.vue";
 import AttributeManager from "~/components/AttributeManager.vue";
 import VariantManager from "~/components/VariantManager.vue";
 import { useToast } from "~/composables/useToast";
+import { useGlobalLoading } from "~/composables/useGlobalLoading";
 import { useCartStore } from "~/stores/cart";
 import { useTypesStore } from "~/stores/types";
 import { useProductStore } from "~/stores/products";
@@ -33,6 +34,7 @@ const typesDialog = ref(false);
 const attributesDialog = ref(false);
 const logoutDialog = ref(false);
 const tab = ref<"details" | "variants">("details");
+const { isGlobalLoading } = useGlobalLoading();
 
 // فقط دسته‌هایی که واقعاً محصول قابل نمایش دارند
 const visibleTypes = computed(() => {
@@ -187,8 +189,14 @@ onMounted(async () => {
         </nav>
       </header>
 
-      <main class="flex-1" :class="{ 'mx-auto px-6 py-8': route.path !== '/login' && route.path !== '/information' }">
-        <slot />
+      <main class="flex-1 flex flex-col">
+        <div v-if="isGlobalLoading" class="w-full h-[90vh] !pb-24 flex items-center justify-center bg-white">
+          <AppLoader />
+        </div>
+
+        <div v-show="!isGlobalLoading" :class="{ 'mx-auto px-6 py-8 w-full': route.path !== '/login' && route.path !== '/information' }">
+          <slot />
+        </div>
       </main>
 
       <Transition name="toast-slide">
@@ -201,36 +209,34 @@ onMounted(async () => {
         </div>
       </Transition>
 
-      <footer v-if="route.path !== '/login'" class="bg-neutral-900 text-white pt-16 pb-8 mt-auto relative z-20">
+      <footer v-if="route.path !== '/login'" class="bg-neutral-900 text-white pt-10 pb-4 relative z-20">
         <div class="container mx-auto px-10">
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 items-start gap-8 mb-12">
             <!-- ستون ۱: درباره ما -->
             <div>
-              <div class="flex items-center gap-2 mb-4">
+              <div class="flex items-center gap-2 mb-2 !-mt-2">
                 <img src="/images/logo.png" class="h-10 w-auto brightness-0 invert opacity-80" alt="Logo" />
-                <h3 class="text-lg font-bold text-white">علی‌شاپ</h3>
+                <h3 class="text-lg font-bold text-white">مزین شاپ</h3>
               </div>
               <p class="text-gray-400 text-sm leading-7 text-justify">
-                فروشگاه اینترنتی علی‌شاپ با هدف ارائه محصولات باکیفیت و تجربه خریدی آسان و مطمئن راه‌اندازی شده است. ما بر این باوریم که مشتریان لایق بهترین‌ها هستند و تمام تلاش خود را برای جلب رضایت شما به کار می‌گیریم.
+                فروشگاه اینترنتی مزین‌شاپ با هدف ارائه محصولات باکیفیت و تجربه خریدی آسان و مطمئن راه‌اندازی شده است. ما بر این باوریم که مشتریان لایق بهترین‌ها هستند و تمام تلاش
+                خود را برای جلب رضایت شما به کار می‌گیریم.
               </p>
             </div>
 
             <!-- ستون ۲: دسترسی سریع و دسته‌بندی‌ها -->
-            <div>
-              <h3 class="text-lg font-bold mb-4 text-white">دسترسی سریع</h3>
+            <div class="!flex !items-center gap-5">
               <div class="flex flex-col gap-2 text-sm text-gray-400">
+                <h3 class="text-lg font-semibold mb-2 text-white">دسترسی سریع</h3>
                 <NuxtLink to="/" class="hover:text-primary transition-colors">صفحه اصلی</NuxtLink>
                 <NuxtLink to="/products" class="hover:text-primary transition-colors">محصولات</NuxtLink>
                 <NuxtLink to="/information" class="hover:text-primary transition-colors">حساب کاربری</NuxtLink>
-                
-                <!-- دسته‌بندی‌ها -->
+              </div>
+              <!-- دسته‌بندی‌ها -->
+              <div class="flex flex-col gap-2">
                 <template v-if="visibleTypes.length > 0">
-                  <div class="mt-4 mb-2 font-semibold text-white text-xs">دسته‌بندی‌های محبوب</div>
-                  <NuxtLink 
-                    v-for="type in visibleTypes.slice(0, 4)" 
-                    :key="type.id" 
-                    :to="`/products?type=${type.id}`" 
-                    class="hover:text-primary transition-colors">
+                  <div class="mb-2 font-semibold text-white text-lg">دسته‌بندی‌های محبوب</div>
+                  <NuxtLink v-for="type in visibleTypes.slice(0, 4)" :key="type.id" :to="`/products?type=${type.id}`" class="hover:text-primary text-sm transition-colors">
                     {{ type.typename }}
                   </NuxtLink>
                 </template>
@@ -266,40 +272,36 @@ onMounted(async () => {
                   </a>
                 </li>
                 <li class="flex items-start gap-3">
-                   <div class="bg-neutral-800 p-2 rounded-full mt-1">
-                      <v-icon size="small" color="white">mdi-map-marker</v-icon>
-                   </div>
-                   <span class="mt-2">تهران، میدان آزادی، خیابان آزادی، پلاک ۱۱۰</span>
+                  <div class="bg-neutral-800 p-2 rounded-full mt-1">
+                    <v-icon size="small" color="white">mdi-map-marker</v-icon>
+                  </div>
+                  <span class="mt-2">تهران، میدان آزادی، خیابان آزادی، پلاک ۱۱۰</span>
                 </li>
               </ul>
+              <div class="flex gap-4 md:mt-0">
+                <v-btn icon variant="text" size="small" color="grey" class="hover:!text-white"><v-icon>mdi-instagram</v-icon></v-btn>
+                <v-btn icon variant="text" size="small" color="grey" class="hover:!text-white"><v-icon>mdi-twitter</v-icon></v-btn>
+                <v-btn icon variant="text" size="small" color="grey" class="hover:!text-white"><v-icon>mdi-linkedin</v-icon></v-btn>
+              </div>
             </div>
 
             <!-- ستون ۴: نماد اعتماد -->
             <div>
               <h3 class="text-lg font-bold mb-4 text-white">نمادهای اعتماد</h3>
               <div class="flex flex-wrap gap-4">
-                  <div class="bg-white/10 rounded-xl p-2 w-20 h-20 flex items-center justify-center cursor-pointer hover:bg-white/20 transition-all">
-                      <v-icon size="40" color="grey-lighten-1">mdi-shield-check</v-icon>
-                  </div>
-                  <div class="bg-white/10 rounded-xl p-2 w-20 h-20 flex items-center justify-center cursor-pointer hover:bg-white/20 transition-all">
-                      <v-icon size="40" color="grey-lighten-1">mdi-certificate</v-icon>
-                  </div>
+                <div class="bg-white/10 rounded-xl p-2 w-20 h-20 flex items-center justify-center cursor-pointer hover:bg-white/20 transition-all">
+                  <v-icon size="40" color="grey-lighten-1">mdi-shield-check</v-icon>
+                </div>
+                <div class="bg-white/10 rounded-xl p-2 w-20 h-20 flex items-center justify-center cursor-pointer hover:bg-white/20 transition-all">
+                  <v-icon size="40" color="grey-lighten-1">mdi-certificate</v-icon>
+                </div>
               </div>
-              <p class="text-xs text-gray-500 mt-4">
-                با اطمینان خرید کنید. پرداخت امن و ارسال سریع تضمین شده است.
-              </p>
+              <p class="text-xs text-gray-500 mt-4">با اطمینان خرید کنید. پرداخت امن و ارسال سریع تضمین شده است.</p>
             </div>
           </div>
-          
-          <v-divider class="border-neutral-800 mb-6"></v-divider>
-          
-          <div class="flex flex-col md:flex-row justify-between items-center text-xs text-gray-500 pb-4">
-            <p>تمامی حقوق مادی و معنوی این وب‌سایت محفوظ است.</p>
-            <div class="flex gap-4 mt-4 md:mt-0">
-               <v-btn icon variant="text" size="small" color="grey" class="hover:!text-white"><v-icon>mdi-instagram</v-icon></v-btn>
-               <v-btn icon variant="text" size="small" color="grey" class="hover:!text-white"><v-icon>mdi-twitter</v-icon></v-btn>
-               <v-btn icon variant="text" size="small" color="grey" class="hover:!text-white"><v-icon>mdi-linkedin</v-icon></v-btn>
-            </div>
+
+          <div class="flex flex-col md:flex-row justify-center items-center text-xs text-gray-500 pb-2">
+            <p>تمامی حقوق مادی و معنوی این وب‌سایت محفوظ و متعلق به مجموعه مزین‌شاپ میباشد.</p>
           </div>
         </div>
       </footer>
