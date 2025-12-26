@@ -412,13 +412,7 @@ const deleteComment = async (comment: CommentWithMeta) => {
             <div class="relative group overflow-hidden rounded-2xl shadow-lg border border-gray-100 bg-white">
               <v-carousel v-model="selectedImageIndex" hide-delimiters :show-arrows="thumbnailImages.length > 1 ? 'hover' : false" height="400" color="primary">
                 <v-carousel-item v-for="(imgUrl, index) in thumbnailImages" :key="index" :src="imgUrl" cover class="cursor-zoom-in" @click="galleryOpen = true"></v-carousel-item>
-              </v-carousel>
-
-              <div
-                v-if="selectedVariant && selectedVariant.stock_quantity === 0"
-                class="absolute inset-0 bg-white/60 flex items-center justify-center backdrop-blur-sm z-20 pointer-events-none">
-                <span class="text-red-600 font-extrabold text-2xl border-4 border-red-600 px-6 py-2 rounded-lg -rotate-12 opacity-80">ناموجود</span>
-              </div>
+              </v-carousel>              
             </div>
 
             <div v-if="thumbnailImages.length > 1" class="mt-6 flex flex-wrap gap-3 justify-center">

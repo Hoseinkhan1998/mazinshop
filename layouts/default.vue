@@ -97,19 +97,17 @@ onMounted(async () => {
     <div class="relative min-h-screen flex flex-col">
       <header v-if="route.path !== '/login' && route.path !== '/information'" class="backdrop-blur-2xl sticky top-0 z-30">
         <nav class="container mx-auto px-10 py-4 grid grid-cols-12 items-center">
-          <ClientOnly class="col-span-9">
-            <div class="grid grid-cols-12 items-center">
-              <NuxtLink to="/" class="text-xl col-span-2 font-bold text-gray-800">
-                <img src="/images/logo.png" class="h-14 w-20" alt="" />
-              </NuxtLink>
-              <!-- <div v-if="isAdmin && $route.path !== '/editproduct'" class="col-span-2 !-ms-10">
-                <NuxtLink to="/editproduct" class="px-2 rounded-lg mybg hov py-1">ویرایش فروشگاه من</NuxtLink>
-              </div> -->
-              <div class="ms-5 col-span-6 flex items-center gap-10">
-                <HeaderSearch />
-              </div>
+          <div class="col-span-9 grid grid-cols-12 items-center">
+            <NuxtLink to="/" class="text-xl col-span-2 font-bold text-gray-800">
+              <img src="/images/logo.png" class="h-14 w-20" alt="" />
+            </NuxtLink>
+            <!-- <div v-if="isAdmin && $route.path !== '/editproduct'" class="col-span-2 !-ms-10">
+              <NuxtLink to="/editproduct" class="px-2 rounded-lg mybg hov py-1">ویرایش فروشگاه من</NuxtLink>
+            </div> -->
+            <div class="ms-5 col-span-6 flex items-center gap-10">
+              <HeaderSearch />
             </div>
-          </ClientOnly>
+          </div>
           <!-- name & shoppingcard -->
           <div class="flex items-center gap-3 col-span-3 justify-end">
             <ClientOnly v-if="isLoggedIn">
@@ -169,22 +167,20 @@ onMounted(async () => {
           </div>
           <!-- navigation types -->
           <div class="col-span-4 flex items-center gap-5 mt-4 text-sm">
-            <ClientOnly>
-              <template v-if="visibleTypes.length">
-                <NuxtLink
-                  v-for="type in visibleTypes"
-                  :key="type.id"
-                  :to="`/products?type=${type.id}`"
-                  class="hover-underline-animation right cursor-pointer"
-                  :class="{
-                    'border-b-2 border-stone-600': $route.path.startsWith('/products') && Number($route.query.type) === type.id,
-                  }">
-                  {{ type.typename }}
-                </NuxtLink>
-              </template>
+            <template v-if="visibleTypes.length">
+              <NuxtLink
+                v-for="type in visibleTypes"
+                :key="type.id"
+                :to="`/products?type=${type.id}`"
+                class="hover-underline-animation right cursor-pointer"
+                :class="{
+                  'border-b-2 border-stone-600': $route.path.startsWith('/products') && Number($route.query.type) === type.id,
+                }">
+                {{ type.typename }}
+              </NuxtLink>
+            </template>
 
-              <span v-else class="text-gray-400 text-xs"> فعلاً دسته‌بندی فعالی برای نمایش وجود ندارد. </span>
-            </ClientOnly>
+            <span v-else-if="!isGlobalLoading" class="text-gray-400 text-xs"> بارگذاری دسته‌بندی‌ها... </span>
           </div>
         </nav>
       </header>

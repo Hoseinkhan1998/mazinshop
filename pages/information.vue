@@ -505,7 +505,7 @@ const deleteAddress = async () => {
 </script>
 
 <template>
-  <div v-if="!firstLoadDone" class="w-full h-[80vh] flex items-center justify-center">
+  <div v-if="!firstLoadDone" class="w-full h-[90vh] !mt-[-5vh] flex items-center justify-center">
     <AppLoader />
   </div>
 
@@ -549,13 +549,14 @@ const deleteAddress = async () => {
 
           <div class="max-h-[70vh] overflow-y-auto">
             <div v-for="addr in addresses" :key="addr.id" class="grid grid-cols-12 items-center px-3 py-3 mt-3 border rounded-lg">
-              <div class="grid grid-cols-12 col-span-9">
-                <div class="col-span-4 font-semibold truncate">
+              <div class="grid grid-cols-12 gap-3 col-span-11">
+                <div class="col-span-full flex items-center gap-3 font-semibold truncate">
                   {{ addr.title }}
-                  <span v-if="addr.is_default" class="text-xs text-primary ml-1">(پیش‌فرض)</span>
+                  <p v-if="addr.is_default" class="text-xs text-primary">(پیش‌فرض)</p>
+                  <div v-if="!addr.is_default" class="mybg text-xs hov py-1 cursor-pointer !px-2 rounded-lg text-white" @click="makeDefaultAddress(addr.id)">انتخاب به عنوان پیش‌فرض</div>
                 </div>
                 <p class="text-sm text-gray-600 mt-1 col-span-12">
-                  {{ addr.province }}، {{ addr.city }}، {{ addr.street_address }}، پلاک {{ addr.plaque }}
+                  {{ addr.province }}، {{ addr.city }}، {{ addr.street_address }}، پلاک {{ addr.plaque }} 
                   <template v-if="addr.unit">، واحد {{ addr.unit }}</template>
                 </p>
                 <p class="text-xs text-gray-600 mt-1 col-span-12">
@@ -564,8 +565,7 @@ const deleteAddress = async () => {
                   | موبایل: {{ addr.phone }}
                 </p>
               </div>
-              <div class="col-span-3 gap-2 flex justify-end items-center text-xs">
-                <div v-if="!addr.is_default" class="mybg hov py-1 cursor-pointer !px-2 rounded-lg text-white" @click="makeDefaultAddress(addr.id)">پیش فرض</div>
+              <div class="col-span-1 gap-2 flex justify-end items-center text-xs">
                 <!-- <v-btn size="small" variant="text" class="!text-blue-600" @click="startEditAddress(addr)">ویرایش</v-btn> -->
                 <div @click="startEditAddress(addr)" class="cursor-pointer text-blue-600">
                   <v-icon>mdi-pencil</v-icon>
