@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
 import { useAuthStore } from "~/stores/auth";
 import type { Product } from "~/types/Product";
@@ -80,7 +80,33 @@ const confirmLogout = () => {
   logoutDialog.value = false;
 };
 
+// ---------- Scroll Handling for Header ----------
+const showSubHeader = ref(true);
+let lastScrollY = 0;
+
+const handleScroll = () => {
+  if (typeof window === "undefined") return;
+
+  const currentScrollY = window.scrollY;
+
+  // اگر به ابتدای صفحه چسبیده بودیم، حتما نشان بده
+  if (currentScrollY <= 10) {
+    showSubHeader.value = true;
+  }
+  // اسکرول به پایین -> مخفی کردن (بی‌قید و شرط)
+  else if (currentScrollY > lastScrollY) {
+    showSubHeader.value = false;
+  }
+  // اسکرول به بالا -> نشان دادن (بی‌قید و شرط)
+  else if (currentScrollY < lastScrollY) {
+    showSubHeader.value = true;
+  }
+
+  lastScrollY = currentScrollY;
+};
+
 onMounted(async () => {
+  window.addEventListener("scroll", handleScroll);
   cartStore.initializeCart();
 
   if (typesStore.types.length === 0) {
@@ -90,83 +116,90 @@ onMounted(async () => {
     await productStore.fetchProducts();
   }
 });
+
+onUnmounted(() => {
+  window.removeEventListener("scroll", handleScroll);
+});
 </script>
 
 <template>
   <v-app>
     <div class="relative min-h-screen flex flex-col">
-      <header v-if="route.path !== '/login' && route.path !== '/information'" class="backdrop-blur-2xl sticky top-0 z-30">
-        <nav class="container mx-auto px-10 py-4 grid grid-cols-12 items-center">
-          <div class="col-span-9 grid grid-cols-12 items-center">
-            <NuxtLink to="/" class="text-xl col-span-2 font-bold text-gray-800">
-              <img src="/images/logo.png" class="h-14 w-20" alt="" />
-            </NuxtLink>
-            <!-- <div v-if="isAdmin && $route.path !== '/editproduct'" class="col-span-2 !-ms-10">
-              <NuxtLink to="/editproduct" class="px-2 rounded-lg mybg hov py-1">ویرایش فروشگاه من</NuxtLink>
-            </div> -->
-            <div class="ms-5 col-span-6 flex items-center gap-10">
-              <HeaderSearch />
+      <header v-if="route.path !== '/login' && route.path !== '/information'" class="fixed w-full top-0 z-50 bg-stone-300/80 backdrop-blur-2xl transition-transform duration-300">
+        <nav class="container mx-auto px-10 py-4">
+          <div class="grid grid-cols-12 items-center">
+            <div class="col-span-9 grid grid-cols-12 items-center">
+              <NuxtLink to="/" class="text-xl col-span-2 font-bold text-gray-800">
+                <img src="/images/logo.png" class="h-14 w-20" alt="" />
+              </NuxtLink>
+              <div class="ms-5 col-span-6 flex items-center gap-10">
+                <HeaderSearch />
+              </div>
             </div>
-          </div>
-          <!-- name & shoppingcard -->
-          <div class="flex items-center gap-3 col-span-3 justify-end">
-            <ClientOnly v-if="isLoggedIn">
-              <div class="dropdown dropdown-bottom">
-                <div tabindex="0" role="button" class="flex items-center m-1 gap-2 py-1 border-2 border-neutral-400 border-solid rounded-lg px-4 hov mybg">
-                  <v-icon class="text-white !text-2xl">mdi-account-circle</v-icon>
-                  <p class="truncate max-w-40">{{ displayName }}</p>
-                </div>
-                <ul tabindex="0" class="dropdown-content relative menu gap-3 bg-neutral-100 mt-3 rounded-box z-[1] w-48 !p-2 shadow-xl shadow-neutral-200">
-                  <NuxtLink
-                    v-if="isAdmin && $route.path !== '/editproduct'"
-                    to="/editproduct"
-                    class="cursor-pointer hover:!bg-neutral-200 px-4 py-1 transition-all duration-150 flex items-center gap-1 rounded-lg">
-                    <p>ویرایش فروشگاه من</p>
-                    <v-icon class="!text-xl text-yellow-500 transform -rotate-30">mdi-crown</v-icon>
-                  </NuxtLink>
-                  <NuxtLink
-                    v-if="isAdmin && $route.path !== '/admin/comments'"
-                    to="/admin/comments"
-                    class="cursor-pointer hover:!bg-neutral-200 px-4 py-1 transition-all duration-150 flex items-center gap-1 rounded-lg">
-                    <p>مدیریت کامنت‌ها</p>
-                    <v-icon class="!text-xl text-yellow-500 transform -rotate-30">mdi-crown</v-icon>
-                  </NuxtLink>
+            <!-- name & shoppingcard -->
+            <div class="flex items-center gap-3 col-span-3 justify-end">
+              <ClientOnly v-if="isLoggedIn">
+                <div class="dropdown dropdown-bottom">
+                  <div tabindex="0" role="button" class="flex items-center m-1 gap-2 py-1 border-2 border-neutral-400 border-solid rounded-lg px-4 hov mybg">
+                    <v-icon class="text-white !text-2xl">mdi-account-circle</v-icon>
+                    <p class="truncate max-w-40">{{ displayName }}</p>
+                  </div>
+                  <ul tabindex="0" class="dropdown-content relative menu gap-3 bg-neutral-100 mt-3 rounded-box z-[1] w-48 !p-2 shadow-xl shadow-neutral-200">
+                    <NuxtLink
+                      v-if="isAdmin && $route.path !== '/editproduct'"
+                      to="/editproduct"
+                      class="cursor-pointer hover:!bg-neutral-200 px-4 py-1 transition-all duration-150 flex items-center gap-1 rounded-lg">
+                      <p>ویرایش فروشگاه من</p>
+                      <v-icon class="!text-xl text-yellow-500 transform -rotate-30">mdi-crown</v-icon>
+                    </NuxtLink>
+                    <NuxtLink
+                      v-if="isAdmin && $route.path !== '/admin/comments'"
+                      to="/admin/comments"
+                      class="cursor-pointer hover:!bg-neutral-200 px-4 py-1 transition-all duration-150 flex items-center gap-1 rounded-lg">
+                      <p>مدیریت کامنت‌ها</p>
+                      <v-icon class="!text-xl text-yellow-500 transform -rotate-30">mdi-crown</v-icon>
+                    </NuxtLink>
 
-                  <NuxtLink to="/information" class="cursor-pointer hover:!bg-neutral-200 px-4 py-1 transition-all duration-150 rounded-lg">ویرایش پروفایل</NuxtLink>
-                  <li>
-                    <div @click="logoutDialog = true" class="px-4 py-1 bg-red-600 text-white font-semibold hover:bg-red-500 transition-all duration-150 cursor-pointer rounded-md">
-                      خروج
-                    </div>
-                  </li>
-                </ul>
-              </div>
-            </ClientOnly>
-
-            <ClientOnly v-if="isAdmin">
-              <div class="relative group">
-                <v-icon class="!text-3xl text-yellow-500 transform -rotate-30">mdi-crown</v-icon>
-                <v-tooltip class="!text-xs" activator="parent" location="bottom"><p class="text-xs">ادمین</p></v-tooltip>
-              </div>
-            </ClientOnly>
-            <!-- سبد خرید: همیشه دیده شود -->
-            <NuxtLink v-else to="/shoppingcard" class="cursor-pointer relative" aria-label="سبد خرید">
-              <ClientOnly>
-                <div v-if="cartCount > 0" class="rounded-full bg-red-500 text-xs flex justify-center items-center text-white absolute -top-2 -right-2 px-1 min-w-[18px] h-[18px]">
-                  {{ cartCount }}
+                    <NuxtLink to="/information" class="cursor-pointer hover:!bg-neutral-200 px-4 py-1 transition-all duration-150 rounded-lg">ویرایش پروفایل</NuxtLink>
+                    <li>
+                      <div
+                        @click="logoutDialog = true"
+                        class="px-4 py-1 bg-red-600 text-white font-semibold hover:bg-red-500 transition-all duration-150 cursor-pointer rounded-md">
+                        خروج
+                      </div>
+                    </li>
+                  </ul>
                 </div>
               </ClientOnly>
-              <v-icon class="!text-3xl">mdi-cart-variant</v-icon>
-            </NuxtLink>
 
-            <!-- ورود/خروج -->
-            <ClientOnly>
-              <NuxtLink v-if="!isLoggedIn" to="/login">
-                <div class="bg-stone-600 !text-white rounded-lg hover:bg-stone-500 transition-all duration-150 px-4 py-2">ورود / ثبت نام</div>
+              <ClientOnly v-if="isAdmin">
+                <div class="relative group">
+                  <v-icon class="!text-3xl text-yellow-500 transform -rotate-30">mdi-crown</v-icon>
+                  <v-tooltip class="!text-xs" activator="parent" location="bottom"><p class="text-xs">ادمین</p></v-tooltip>
+                </div>
+              </ClientOnly>
+              <!-- سبد خرید: همیشه دیده شود -->
+              <NuxtLink v-else to="/shoppingcard" class="cursor-pointer relative" aria-label="سبد خرید">
+                <ClientOnly>
+                  <div v-if="cartCount > 0" class="rounded-full bg-red-500 text-xs flex justify-center items-center text-white absolute -top-2 -right-2 px-1 min-w-[18px] h-[18px]">
+                    {{ cartCount }}
+                  </div>
+                </ClientOnly>
+                <v-icon class="!text-3xl">mdi-cart-variant</v-icon>
               </NuxtLink>
-            </ClientOnly>
+
+              <!-- ورود/خروج -->
+              <ClientOnly>
+                <NuxtLink v-if="!isLoggedIn" to="/login">
+                  <div class="bg-stone-600 !text-white rounded-lg hover:bg-stone-500 transition-all duration-150 px-4 py-2">ورود / ثبت نام</div>
+                </NuxtLink>
+              </ClientOnly>
+            </div>
           </div>
           <!-- navigation types -->
-          <div class="col-span-4 flex items-center gap-5 mt-4 text-sm">
+          <div
+            class="col-span-12 flex items-center gap-5 text-sm transition-all duration-300 ease-in-out overflow-hidden"
+            :class="showSubHeader ? 'max-h-20 opacity-100 translate-y-0 mt-2' : 'max-h-0 opacity-0 -translate-y-2 mt-0'">
             <template v-if="visibleTypes.length">
               <NuxtLink
                 v-for="type in visibleTypes"
@@ -185,12 +218,12 @@ onMounted(async () => {
         </nav>
       </header>
 
-      <main class="flex-1 flex flex-col">
+      <main class="flex-1 flex flex-col" :class="{ '!pt-28': route.path !== '/login' && route.path !== '/information' }">
         <div v-if="isGlobalLoading" class="w-full h-[90vh] !pb-24 flex items-center justify-center bg-white">
           <AppLoader />
         </div>
 
-        <div v-show="!isGlobalLoading" :class="{ 'mx-auto px-6 py-8 w-full': route.path !== '/login' && route.path !== '/information' }">
+        <div v-show="!isGlobalLoading" :class="{ 'mx-auto px-6 py-8 w-full': route.path !== '/login' && route.path !== '/information' && route.path !== '/' }">
           <slot />
         </div>
       </main>

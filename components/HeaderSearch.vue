@@ -151,7 +151,7 @@ onUnmounted(() => {
       @keyup.enter="submitSearch"
       type="text"
       placeholder="جستجو در محصولات، دسته‌ها و ..."
-      class="w-full bg-stone-50 border-0 ring-1 ring-stone-200 text-stone-700 placeholder-stone-400 !rounded-2xl px-4 py-3 pl-12 focus:ring-2 focus:ring-stone-500 focus:bg-white shadow-sm transition-all duration-300 ease-in-out outline-none text-sm font-medium" />
+      class="w-full bg-stone-50 border-0 ring-1 ring-stone-400 text-stone-700 placeholder-stone-400 !rounded-2xl px-4 py-3 pl-12 focus:ring-2 focus:ring-stone-500 focus:bg-white shadow-sm transition-all duration-300 ease-in-out outline-none text-sm font-medium" />
 
     <!-- دراپ‌داون پیشنهادها -->
     <Transition name="fade-slide">
