@@ -383,7 +383,7 @@ onUnmounted(() => {
           </v-card>
         </v-dialog>
 
-        <v-dialog v-model="typesDialog" max-width="500px">
+        <v-dialog v-model="typesDialog" max-width="800px">
           <v-card class="!rounded-xl !p-0">
             <v-card-title><span class="text-h5">مدیریت انواع محصول</span></v-card-title>
             <v-card-text><TypeManager /></v-card-text>

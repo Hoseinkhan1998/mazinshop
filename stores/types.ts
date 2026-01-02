@@ -4,12 +4,19 @@ import { defineStore } from "pinia";
 import axios from "axios";
 import type { Attribute } from "./attributes";
 
-// اینترفیس را با خروجی دقیق تابع RPC هماهنگ می‌کنیم
 export interface ProductType {
   id: number;
   created_at: string;
   typename: string;
-  attributes: Attribute[] | null; // ویژگی‌ها می‌توانند null باشند
+  image_url?: string | null;
+
+  show_on_home?: boolean;
+  hero_title?: string | null;
+  hero_subtitle?: string | null;
+  hero_image_url?: string | null;
+  hero_order?: number;
+
+  attributes: Attribute[] | null;
 }
 
 export const useTypesStore = defineStore("types", {
@@ -22,7 +29,7 @@ export const useTypesStore = defineStore("types", {
     // ۱. واکشی انواع با استفاده از تابع سفارشی دیتابیس (RPC)
     async fetchTypes(force: boolean = false) {
       const { $supabase } = useNuxtApp();
-      const CACHE_KEY = "mazin_types_cache_v1";
+      const CACHE_KEY = "mazin_types_cache_v3";
       const CACHE_TTL = 1000 * 60 * 60; // مثلا ۱ ساعت – چون ساختار دسته‌ها خیلی کم عوض میشه
       const now = Date.now();
 
@@ -73,8 +80,41 @@ export const useTypesStore = defineStore("types", {
       await fetchFromNetwork();
     },
 
+    async updateTypeHeroFields(
+      typeId: number,
+      payload: {
+        show_on_home?: boolean;
+        hero_title?: string | null;
+        hero_subtitle?: string | null;
+        hero_image_url?: string | null;
+        hero_order?: number;
+      }
+    ) {
+      const config = useRuntimeConfig();
+      const { $supabase } = useNuxtApp();
+      const {
+        data: { session },
+      } = await $supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("User not authenticated.");
+
+      const url = `${config.public.supabaseUrl}/rest/v1/types?id=eq.${typeId}`;
+
+      await axios.patch(url, payload, {
+        headers: {
+          apikey: config.public.supabaseKey,
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Prefer: "return=representation",
+        },
+      });
+
+      // برای اینکه UI سریع آپدیت شود:
+      await this.fetchTypes(true);
+    },
+
     // ۲. افزودن یک نوع جدید به همراه ویژگی‌های متصل به آن
-    async addTypeWithAttributes(typename: string, attributeIds: number[]) {
+    async addTypeWithAttributes(typename: string, attributeIds: number[], imageUrl: string | null = null) {
       const config = useRuntimeConfig();
       const { $supabase } = useNuxtApp();
       const {
@@ -88,7 +128,7 @@ export const useTypesStore = defineStore("types", {
         const typeUrl = `${config.public.supabaseUrl}/rest/v1/types`;
         const typeResponse = await axios.post(
           typeUrl,
-          { typename },
+          { typename, image_url: imageUrl },
           {
             headers: {
               apikey: config.public.supabaseKey,
@@ -196,6 +236,34 @@ export const useTypesStore = defineStore("types", {
         console.error("Error fetching options for type:", error);
         return {};
       }
+    },
+
+    async updateTypeImage(typeId: number, imageUrl: string | null) {
+      const config = useRuntimeConfig();
+      const { $supabase } = useNuxtApp();
+      const {
+        data: { session },
+      } = await $supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error("User not authenticated.");
+
+      const url = `${config.public.supabaseUrl}/rest/v1/types?id=eq.${typeId}`;
+
+      await axios.patch(
+        url,
+        { image_url: imageUrl },
+        {
+          headers: {
+            apikey: config.public.supabaseKey,
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+            Prefer: "return=representation",
+          },
+        }
+      );
+
+      // برای اینکه UI و cache هم آپدیت بشه:
+      await this.fetchTypes(true);
     },
   },
 });

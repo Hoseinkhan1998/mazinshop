@@ -1,28 +1,111 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import HomePageCategories from "~/components/homePage/Categories.vue";
 
-// Hero Section
-const totalProducts = "۱,۴۶۴";
-const happyCustomers = "۱۲,۵۷۳";
+import { useTypesStore } from "~/stores/types";
+import { useProductStore } from "~/stores/products";
 
-const heroImages = [
-  "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1920&q=80",
-  "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1920&q=80",
-  "https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=1920&q=80",
-  "https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?auto=format&fit=crop&w=1920&q=80",
-  "https://images.unsplash.com/photo-1538688525198-9b88f6f53126?auto=format&fit=crop&w=1920&q=80",
-];
+const HERO_DEFAULT_IMAGE = "/images/hero-default.jpg";
+const TYPE_DEFAULT_IMAGE = "/images/type-default.jpg";
+
+const formatFaNumber = (n: number) => {
+  try {
+    return new Intl.NumberFormat("fa-IR").format(n);
+  } catch {
+    return String(n);
+  }
+};
+
+const typesStore = useTypesStore();
+const productStore = useProductStore();
+
+const totalProductsCount = computed(() => productStore.products?.length || 0);
+const totalProducts = computed(() => formatFaNumber(totalProductsCount.value));
+
+const happyCustomers = ref("۱۲,۵۷۳");
+
+const typesWithProducts = computed(() => {
+  if (!typesStore.types?.length || !productStore.products?.length) return [];
+  return typesStore.types.filter((t) => productStore.products.some((p) => p.type_id === t.id));
+});
+
+type CategoryCard = {
+  id: number;
+  name: string;
+  image: string;
+};
+
+const categoriesForHome = computed<CategoryCard[]>(() => {
+  return typesWithProducts.value.map((t: any) => ({
+    id: t.id,
+    name: t.typename,
+    image: t.image_url || TYPE_DEFAULT_IMAGE,
+  }));
+});
+
+type HeroSlide = {
+  id: number | null; // اگر اسلاید پیش‌فرض بود null
+  image: string;
+  title: string;
+  subtitle: string;
+  ctaTo: string; // لینک دکمه خرید
+};
+
+const heroSlides = computed<HeroSlide[]>(() => {
+  const allTypes = typesStore.types || [];
+  const hasProducts = (typeId: number) => productStore.products.some((p) => p.type_id === typeId);
+
+  const picked = allTypes
+    .filter((t: any) => !!t.show_on_home)
+    .filter((t) => hasProducts(t.id))
+    .map((t: any) => ({
+      id: t.id,
+      image: t.hero_image_url || HERO_DEFAULT_IMAGE,
+      title: (t.hero_title || "").trim() || t.typename || "دسته‌بندی منتخب",
+      subtitle: (t.hero_subtitle || "").trim() || "تجربه‌ای مدرن با محصولاتی که برای سلیقه خاص شما انتخاب شده‌اند.",
+      ctaTo: `/products?type=${t.id}`,
+    }));
+
+  if (picked.length > 0) return picked;
+
+  const firstType = allTypes.find((t) => hasProducts(t.id));
+  if (firstType) {
+    const ft: any = firstType;
+    return [
+      {
+        id: ft.id,
+        image: ft.hero_image_url || HERO_DEFAULT_IMAGE,
+        title: (ft.hero_title || "").trim() || ft.typename || "دسته‌بندی منتخب",
+        subtitle: (ft.hero_subtitle || "").trim() || "تجربه‌ای مدرن با محصولاتی که برای سلیقه خاص شما انتخاب شده‌اند.",
+        ctaTo: `/products?type=${ft.id}`,
+      },
+    ];
+  }
+
+  return [
+    {
+      id: null,
+      image: HERO_DEFAULT_IMAGE,
+      title: "گلچینی از بهترین اکسسوری و مبلمان",
+      subtitle: "ما در مزین شاپ، زیبایی را به خانه شما می‌آوریم. تجربه‌ای مدرن با محصولاتی خاص و منتخب.",
+      ctaTo: "/products",
+    },
+  ];
+});
 
 const currentImageIndex = ref(0);
 let autoPlayInterval: ReturnType<typeof setInterval> | null = null;
 
+const hasMultipleHeroSlides = computed(() => heroSlides.value.length > 1);
+
 const nextImage = () => {
-  currentImageIndex.value = (currentImageIndex.value + 1) % heroImages.length;
+  if (!heroSlides.value.length) return;
+  currentImageIndex.value = (currentImageIndex.value + 1) % heroSlides.value.length;
 };
 
 const prevImage = () => {
-  currentImageIndex.value = (currentImageIndex.value - 1 + heroImages.length) % heroImages.length;
+  if (!heroSlides.value.length) return;
+  currentImageIndex.value = (currentImageIndex.value - 1 + heroSlides.value.length) % heroSlides.value.length;
 };
 
 const stopAutoPlay = () => {
@@ -32,39 +115,49 @@ const stopAutoPlay = () => {
 
 const startAutoPlay = () => {
   stopAutoPlay();
+  if (!hasMultipleHeroSlides.value) return;
+
   autoPlayInterval = setInterval(() => {
     nextImage();
   }, 6000);
 };
 
 const setImage = (index: number) => {
-  currentImageIndex.value = index;
+  if (!heroSlides.value.length) return;
+  currentImageIndex.value = Math.max(0, Math.min(index, heroSlides.value.length - 1));
   startAutoPlay();
 };
 
-onMounted(() => {
+watch(
+  () => heroSlides.value.length,
+  () => {
+    currentImageIndex.value = 0;
+    if (import.meta.client) startAutoPlay();
+  }
+);
+
+onMounted(async () => {
+  if (!typesStore.types.length) await typesStore.fetchTypes();
+  if (!productStore.products.length) await productStore.fetchProducts();
+
   startAutoPlay();
 });
 
 onUnmounted(() => {
   stopAutoPlay();
 });
-
-// Assets (برای سکشن‌های بعدی هنوز لازم‌اند)
-const cardLeftImage = "https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=900&q=70";
-const cardRightImage = "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?auto=format&fit=crop&w=900&q=70";
 </script>
 
 <template>
   <div class="w-full overflow-x-hidden" dir="rtl">
     <!-- Hero Section -->
     <section class="relative w-full h-[650px] overflow-hidden">
-      <div v-for="(img, index) in heroImages" :key="index">
+      <div v-for="(slide, index) in heroSlides" :key="slide.id">
         <transition name="fade-hero">
           <div
             v-if="currentImageIndex === index"
-            class="absolute inset-0 bg-cover bg-center bg-no-repeat transition-all duration-[2000ms]"
-            :style="{ backgroundImage: `url(${img})` }">
+            class="absolute inset-0 bg-cover bg-center bg-no-repeat"
+            :style="{ backgroundImage: `url(${slide.image})` }">
             <div class="absolute inset-0 bg-gradient-to-l from-black/90 via-black/40 to-transparent"></div>
           </div>
         </transition>
@@ -73,18 +166,23 @@ const cardRightImage = "https://images.unsplash.com/photo-1586023492125-27b2c045
       <div class="relative h-full container mx-auto px-6 lg:px-16 flex !pt-20">
         <div class="grid grid-cols-12 w-full">
           <div class="col-span-12 lg:col-span-7 text-white">
-            <h1 class="text-3xl sm:text-4xl lg:text-5xl font-black leading-[1.3] mb-5">
-              گلچینی از بهترین<br />
-              <span class="text-[#b69a78]">اکسسوری و مبلمان</span>
-            </h1>
-
-            <p class="text-white/70 text-sm sm:text-base max-w-lg leading-loose mb-8 font-medium">
-              ما در مزین شاپ، زیبایی را به خانه شما می‌آوریم. تجربه‌ای مدرن با محصولاتی که برای سلیقه خاص شما انتخاب شده‌اند.
-            </p>
+            <!-- Container for Title and Subtitle to prevent layout shift -->
+            <div class="relative min-h-[220px] sm:min-h-[200px] lg:min-h-[260px]">
+              <Transition name="fade-hero-text">
+                <div :key="currentImageIndex" class="absolute inset-0">
+                  <h1 class="text-3xl sm:text-4xl lg:text-5xl font-black leading-[1.3] mb-5">
+                    {{ heroSlides[currentImageIndex]?.title }}
+                  </h1>
+                  <p class="text-white/70 text-sm sm:text-base max-w-lg leading-loose mb-8 font-medium">
+                    {{ heroSlides[currentImageIndex]?.subtitle }}
+                  </p>
+                </div>
+              </Transition>
+            </div>
 
             <div class="flex flex-wrap items-center gap-3">
               <NuxtLink
-                to="/products"
+                :to="heroSlides[currentImageIndex]?.ctaTo || '/products'"
                 class="holographic-button px-6 py-3 rounded-full bg-white text-neutral-900 text-sm font-bold shadow-lg flex items-center gap-2 relative overflow-hidden">
                 <span class="relative z-10">همین حالا خرید کنید</span>
                 <v-icon size="20" class="relative z-10">mdi-cart-outline</v-icon>
@@ -104,7 +202,7 @@ const cardRightImage = "https://images.unsplash.com/photo-1586023492125-27b2c045
           </div>
 
           <!-- Vertical Swiper Controls -->
-          <div class="hidden lg:flex col-span-5 flex-col justify-center items-end pl-12 relative z-20">
+          <div v-if="hasMultipleHeroSlides" class="hidden lg:flex col-span-5 flex-col justify-center items-end pl-12 relative z-20">
             <div class="flex flex-col items-center gap-6 bg-black/50 backdrop-blur-xl py-6 px-3 rounded-full border border-white/50">
               <!-- Up Arrow -->
               <button
@@ -119,7 +217,7 @@ const cardRightImage = "https://images.unsplash.com/photo-1586023492125-27b2c045
               <!-- Indicators -->
               <div class="flex flex-col gap-3 items-center">
                 <div
-                  v-for="(img, index) in heroImages"
+                  v-for="(img, index) in heroSlides"
                   :key="index"
                   @click="setImage(index)"
                   class="cursor-pointer transition-all duration-500 rounded-full"
@@ -144,7 +242,7 @@ const cardRightImage = "https://images.unsplash.com/photo-1586023492125-27b2c045
     </section>
     <!-- Product Categories Section -->
     <section class="bg-white py-6 px-6 lg:px-16 overflow-hidden">
-      <HomePageCategories />
+      <HomePageCategories :categories="homepageCategories" linkBase="/products" queryKey="type" />
     </section>
 
     <!-- Discounted products Section -->
@@ -244,11 +342,22 @@ const cardRightImage = "https://images.unsplash.com/photo-1586023492125-27b2c045
 
 .fade-hero-enter-active,
 .fade-hero-leave-active {
-  transition: opacity 1.8s ease-in-out;
+  transition: opacity 1.5s ease-in-out;
 }
 
 .fade-hero-enter-from,
 .fade-hero-leave-to {
+  opacity: 0;
+}
+
+.fade-hero-text-enter-active,
+.fade-hero-text-leave-active {
+  transition: opacity 1.5s ease-in-out !important;
+  position: absolute;
+}
+
+.fade-hero-text-enter-from,
+.fade-hero-text-leave-to {
   opacity: 0;
 }
 

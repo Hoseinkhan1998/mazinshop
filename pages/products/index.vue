@@ -521,10 +521,6 @@ onUnmounted(() => {
       <AppLoader />
     </div>
 
-    <div v-else-if="shownProducts.length === 0" class="text-center text-gray-500">
-      {{ hasSearch ? "محصولی مطابق جستجو یافت نشد." : "محصولی با این فیلترها پیدا نشد." }}
-    </div>
-
     <div v-else class="grid grid-cols-12 gap-5 relative">
       <!-- ستون فیلترها -->
       <div class="col-span-3">
@@ -677,45 +673,50 @@ onUnmounted(() => {
             {{ hasSearch ? "نتایج جستجو" : "لیست محصولات" }}
             <span v-if="currentType"> ({{ currentType.typename }})</span>
           </h1>
+          
+          <template v-if="shownProducts.length > 0">
+            <NuxtLink            
+              v-for="product in shownProducts"
+              :key="product.id"
+              :to="`/products/${product.id}`"
+              class="card card-compact bg-base-100 shadow-lg hover:!shadow-3xl shadow-neutral-200 border-[1px] border-neutral-200 !rounded-lg transition-all duration-300 cursor-pointer group col-span-4 no-underline text-current relative overflow-hidden">
+              <div
+                class="absolute top-0 right-0 w-1/4 h-1/4 border-t-[2px] border-r-[2px] border-yellow-500 rounded-tr-lg group-hover:rounded-lg rounded-bl-lg pointer-events-none z-10 transition-all duration-500 ease-out group-hover:w-full group-hover:h-full"></div>
+              <figure class="h-[35vh] overflow-hidden relative rounded-t-lg">
+                <img
+                  :src="product.image_urls?.[0] || '/placeholder.png'"
+                  :alt="product.title"
+                  class="w-full h-full object-cover transition-all duration-700 ease-in-out group-hover:scale-110"
+                  :class="{ 'group-hover:opacity-0': product.image_urls?.length > 1 }" />
 
-          <NuxtLink            
-            v-for="product in shownProducts"
-            :key="product.id"
-            :to="`/products/${product.id}`"
-            class="card card-compact bg-base-100 shadow-lg hover:!shadow-3xl shadow-neutral-200 border-[1px] border-neutral-200 !rounded-lg transition-all duration-300 cursor-pointer group col-span-4 no-underline text-current relative overflow-hidden">
-            <div
-              class="absolute top-0 right-0 w-1/4 h-1/4 border-t-[2px] border-r-[2px] border-yellow-500 rounded-tr-lg group-hover:rounded-lg rounded-bl-lg pointer-events-none z-10 transition-all duration-500 ease-out group-hover:w-full group-hover:h-full"></div>
-            <figure class="h-[35vh] overflow-hidden relative rounded-t-lg">
-              <img
-                :src="product.image_urls?.[0] || '/placeholder.png'"
-                :alt="product.title"
-                class="w-full h-full object-cover transition-all duration-700 ease-in-out group-hover:scale-110"
-                :class="{ 'group-hover:opacity-0': product.image_urls?.length > 1 }" />
+                <img
+                  v-if="product.image_urls?.length > 1"
+                  :src="product.image_urls[1]"
+                  :alt="product.title"
+                  class="absolute inset-0 w-full h-full object-cover transition-all duration-500 ease-in-out opacity-0 group-hover:!opacity-100 group-hover:scale-110" />
+              </figure>
 
-              <img
-                v-if="product.image_urls?.length > 1"
-                :src="product.image_urls[1]"
-                :alt="product.title"
-                class="absolute inset-0 w-full h-full object-cover transition-all duration-500 ease-in-out opacity-0 group-hover:!opacity-100 group-hover:scale-110" />
-            </figure>
+              <div class="!p-3">
+                <h2 class="text-gray-800 line-clamp-2 h-12">
+                  {{ product.title }}
+                </h2>
 
-            <div class="!p-3">
-              <h2 class="text-gray-800 line-clamp-2 h-12">
-                {{ product.title }}
-              </h2>
-
-              <div class="flex items-center gap-2 mt-1">
-                <span class="text-gray-500 text-xs"> دسته بندی: {{ getTypeName(product) }} </span>
+                <div class="flex items-center gap-2 mt-1">
+                  <span class="text-gray-500 text-xs"> دسته بندی: {{ getTypeName(product) }} </span>
+                </div>
+                <div class="card-actions justify-end items-center">
+                  <span class="text-primary text-xl font-bold">
+                    {{ getPriceRange(product) }}
+                  </span>
+                </div>
               </div>
-              <div class="card-actions justify-end items-center">
-                <span class="text-primary text-xl font-bold">
-                  {{ getPriceRange(product) }}
-                </span>
-              </div>
-            </div>
-            <div
-              class="absolute bottom-0 left-0 w-1/4 h-1/4 border-b-[2px] border-l-[2px] border-yellow-500 rounded-bl-lg rounded-tr-lg group-hover:rounded-lg pointer-events-none z-10 transition-all duration-500 ease-out group-hover:w-full group-hover:h-full"></div>
-          </NuxtLink>
+              <div
+                class="absolute bottom-0 left-0 w-1/4 h-1/4 border-b-[2px] border-l-[2px] border-yellow-500 rounded-bl-lg rounded-tr-lg group-hover:rounded-lg pointer-events-none z-10 transition-all duration-500 ease-out group-hover:w-full group-hover:h-full"></div>
+            </NuxtLink>
+          </template>
+          <div v-else class="col-span-full text-center py-20 text-gray-500">
+            {{ hasSearch ? "محصولی مطابق جستجو یافت نشد." : "محصولی با این فیلترها پیدا نشد." }}
+          </div>
         </div>
       </div>
     </div>
