@@ -1,97 +1,45 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick, computed } from "vue";
+import { ref, onMounted, nextTick, computed, watch } from "vue";
 import { useRouter } from "vue-router";
 
-// Swiper
 import { Swiper, SwiperSlide } from "swiper/vue";
 import { Navigation } from "swiper/modules";
 import "swiper/css";
 import "swiper/css/navigation";
 
 type DiscountProduct = {
-  id: number;
+  id: number; // product id
+  variant_id: number; // representative discounted variant
   title: string;
   image: string;
-  oldPrice: number; // تومان (عدد خام)
+  oldPrice: number;
   newPrice: number;
-  fireicon?: Boolean; // مثلا "فروش ویژه"
-  inventoryno?: Number; // موجودی انبار
+  discountPercent: number;
+  fireicon: boolean;
+  inventoryno: number;
+  type_id: number | null;
 };
-
-// ---- hardcoded demo data (فعلاً بصری)
-const products = ref<DiscountProduct[]>([
-  {
-    id: 101,
-    title: "صندلی مدرن مدل LUX-01",
-    image: "https://images.unsplash.com/photo-1582582621959-48d27397dc19?auto=format&fit=crop&w=1200&q=80",
-    oldPrice: 8900000,
-    newPrice: 6490000,
-    fireicon: true,
-    inventoryno: 10,
-  },
-  {
-    id: 102,
-    title: "میز جلو مبلی سنگی مینیمال",
-    image: "https://images.unsplash.com/photo-1549497538-303791108f95?auto=format&fit=crop&w=1200&q=80",
-    oldPrice: 7200000,
-    newPrice: 5290000,
-    fireicon: false,
-    inventoryno: 5,
-  },
-  {
-    id: 103,
-    title: "آباژور ایستاده طلایی",
-    image: "https://images.unsplash.com/photo-1519710164239-da123dc03ef4?auto=format&fit=crop&w=1200&q=80",
-    oldPrice: 4600000,
-    newPrice: 3190000,
-    fireicon: true,
-    inventoryno: 19,
-  },
-  {
-    id: 104,
-    title: "کاناپه دو نفره پارچه‌ای",
-    image: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1200&q=80",
-    oldPrice: 24500000,
-    newPrice: 19900000,
-    fireicon: false,
-    inventoryno: 5,
-  },
-  {
-    id: 105,
-    title: "سِت اکسسوری دکوراتیو",
-    image: "https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=1200&q=80",
-    oldPrice: 3900000,
-    newPrice: 2790000,
-    fireicon: false,
-    inventoryno: 8,
-  },
-  {
-    id: 106,
-    title: "فرش مدرن طرح هندسی",
-    image: "https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=1200&q=80",
-    oldPrice: 11800000,
-    newPrice: 8990000,
-    fireicon: true,
-    inventoryno: 2,
-  },
-]);
 
 const router = useRouter();
 const modules = [Navigation];
 
 // Nav buttons refs
-const navPrevEl = ref<HTMLElement | null>(null); // راست
-const navNextEl = ref<HTMLElement | null>(null); // چپ
+const navPrevEl = ref<HTMLElement | null>(null);
+const navNextEl = ref<HTMLElement | null>(null);
 
 const discountedSwiper = ref<any>(null);
 const setDiscountedSwiper = (s: any) => {
   discountedSwiper.value = s;
 };
 
-// format price (تومان) — ساده و سریع
+// ---- fetch data (SSR friendly) ----
+const { data, pending, error, refresh } = await useFetch<{ products: DiscountProduct[] }>("/api/home/discounted", { server: true });
+
+const products = computed(() => data.value?.products ?? []);
+
+// format price (تومان)
 const formatToman = (price: number) => {
-  // جداکننده هزارگان و تبدیل به فارسی
-  const str = price.toLocaleString("en-US");
+  const str = Math.trunc(Math.max(0, price)).toLocaleString("en-US");
   const fa = str
     .replaceAll("0", "۰")
     .replaceAll("1", "۱")
@@ -107,14 +55,7 @@ const formatToman = (price: number) => {
   return fa;
 };
 
-const discountPercent = (p: DiscountProduct) => {
-  if (p.oldPrice <= 0) return 0;
-  const d = Math.round(((p.oldPrice - p.newPrice) / p.oldPrice) * 100);
-  return Math.max(0, d);
-};
-
 const goProduct = (e: MouseEvent, p: DiscountProduct) => {
-  // drag = کلیک نکن
   if (!discountedSwiper.value?.allowClick) {
     e.preventDefault();
     e.stopPropagation();
@@ -152,7 +93,7 @@ const discountedSwiperOptions = {
   },
 };
 
-onMounted(async () => {
+const reInitNav = async () => {
   await nextTick();
   if (discountedSwiper.value?.navigation) {
     try {
@@ -160,13 +101,19 @@ onMounted(async () => {
       discountedSwiper.value.navigation.update();
     } catch {}
   }
+};
+
+onMounted(async () => {
+  await reInitNav();
 });
 
-// یک شمارنده نمایشی ساده برای “زمان محدود” (صرفاً بصری)
-const fakeTimer = computed(() => {
-  // یه متن ثابت لوکس؛ بعداً واقعی می‌کنی
-  return "۰۲:۴۵:۱۸";
-});
+// وقتی دیتا آمد/تغییر کرد، ناوبری swiper آپدیت شود
+watch(
+  () => products.value.length,
+  async () => {
+    await reInitNav();
+  }
+);
 </script>
 
 <template>
@@ -180,17 +127,18 @@ const fakeTimer = computed(() => {
         <div>
           <div class="flex items-center gap-3 mb-3">
             <span class="px-3 py-1 rounded-full text-[11px] font-black bg-black text-white"> 🔥 محصولات پر تخفیف </span>
-            
           </div>
 
           <h2 class="text-2xl sm:text-2xl font-black text-red-500 leading-tight">محصولات تخفیف‌خورده‌ی منتخب</h2>
-          <p class="text-sm sm:text-xs text-neutral-900 mt-2 font-medium leading-relaxed max-w-2xl">
-            بهترین انتخاب‌ها با تخفیف واقعی — قبل از تمام شدن موجودی، سریع‌تر انتخاب کن.
+          <p class="text-sm sm:text-xs text-neutral-900 mt-2 font-medium leading-relaxed max-w-2xl">بهترین انتخاب‌ها با تخفیف واقعی — قبل از تمام شدن موجودی، سریع‌تر انتخاب کن.</p>
+
+          <p v-if="error" class="text-xs text-red-600 mt-2 font-bold">
+            خطا در دریافت محصولات تخفیف‌خورده.
+            <button class="underline" @click="refresh()">تلاش مجدد</button>
           </p>
         </div>
 
         <div class="flex items-center gap-3">
-          <!-- Nav buttons -->
           <button
             ref="navPrevEl"
             type="button"
@@ -217,27 +165,31 @@ const fakeTimer = computed(() => {
       </div>
     </div>
 
+    <!-- Loading (ساده) -->
+    <div v-if="pending" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div v-for="i in 4" :key="i" class="rounded-[28px] overflow-hidden border border-neutral-100 bg-white">
+        <div class="h-[240px] bg-neutral-200 animate-pulse"></div>
+        <div class="p-5 space-y-3">
+          <div class="h-4 bg-neutral-200 rounded animate-pulse"></div>
+          <div class="h-4 bg-neutral-200 rounded w-2/3 animate-pulse"></div>
+          <div class="h-6 bg-neutral-200 rounded w-1/2 animate-pulse"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Swiper -->
-    <div class="relative">
+    <div v-else class="relative">
       <Swiper v-bind="discountedSwiperOptions" :modules="modules" class="select-none" @swiper="setDiscountedSwiper">
         <SwiperSlide v-for="p in products" :key="p.id">
-          <!-- Product Card -->
-          <div
-            class="group rounded-[28px] overflow-hidden border border-neutral-100 bg-white transition-all duration-500 cursor-pointer"
-            @click="(e) => goProduct(e, p)">
-            <!-- Image -->
+          <div class="group rounded-[28px] overflow-hidden border border-neutral-100 bg-white transition-all duration-500 cursor-pointer" @click="(e) => goProduct(e, p)">
             <div class="relative">
               <img :src="p.image" draggable="false" class="w-full h-[240px] object-cover group-hover:scale-[1.03] transition-transform duration-700" alt="" />
-
-              <!-- Overlay gradient -->
               <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent"></div>
 
-              <!-- Discount badge -->
               <div class="absolute top-4 right-4 flex items-center gap-2">
-                <span class="px-3 py-1 rounded-full text-[11px] font-black bg-[#b69a78] text-white shadow-lg"> ٪{{ formatToman(discountPercent(p)) }} تخفیف </span>              
+                <span class="px-3 py-1 rounded-full text-[11px] font-black bg-[#b69a78] text-white shadow-lg"> ٪{{ formatToman(p.discountPercent) }} تخفیف </span>
               </div>
 
-              <!-- Fire icon -->
               <div v-if="p.fireicon" class="absolute bottom-4 left-4">
                 <div class="w-10 h-10 rounded-2xl bg-white/90 backdrop-blur flex items-center justify-center border border-white/60 shadow">
                   <v-icon class="text-red-600">mdi-fire</v-icon>
@@ -245,13 +197,11 @@ const fakeTimer = computed(() => {
               </div>
             </div>
 
-            <!-- Content -->
             <div class="!p-5">
-              <h3 class="text-sm sm:text-base font-black text-neutral-900 leading-snug line-clamp-2">
+              <h3 class="text-sm sm:text-base font-black text-neutral-900 leading-snug line-clamp-1">
                 {{ p.title }}
               </h3>
 
-              <!-- Prices -->
               <div class="mt-4 flex items-end justify-between gap-4">
                 <div class="flex flex-col">
                   <span class="text-xs text-neutral-400 font-bold line-through"> {{ formatToman(p.oldPrice) }} تومان </span>
@@ -261,7 +211,10 @@ const fakeTimer = computed(() => {
                   </span>
                 </div>
 
-                <div class="text-xs mb-2 font-semibold" :class="p.inventoryno < 6 ? 'text-red-600' : 'text-black'"><span>{{ p.inventoryno }}</span> <span>تا باقی مانده</span></div>
+                <div class="text-xs mb-2 font-semibold" :class="p.inventoryno < 6 ? 'text-red-600' : 'text-black'">
+                  <span>{{ formatToman(p.inventoryno) }}</span>
+                  <span>تا باقی مانده</span>
+                </div>
               </div>
             </div>
           </div>
@@ -272,7 +225,6 @@ const fakeTimer = computed(() => {
 </template>
 
 <style scoped>
-/* برای جلوگیری از drag پیشفرض تصاویر */
 img {
   -webkit-user-drag: none;
   user-drag: none;

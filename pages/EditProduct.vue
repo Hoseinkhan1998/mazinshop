@@ -126,8 +126,7 @@ const confirmDelete = async () => {
           </v-window>
 
           <v-card-actions class="bg-grey-lighten-4">
-            <v-spacer></v-spacer>
-            <v-btn color="blue-darken-1" variant="text" @click="closeEditDialog">بستن</v-btn>
+            <v-btn color="blue-darken-1" variant="text" class=" font-semibold" @click="closeEditDialog">بستن</v-btn>
           </v-card-actions>
         </v-card>
       </v-dialog>

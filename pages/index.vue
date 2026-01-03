@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
-import HomePageCategories from "~/components/homePage/Categories.vue";
 
 import { useTypesStore } from "~/stores/types";
 import { useProductStore } from "~/stores/products";
@@ -242,7 +241,7 @@ onUnmounted(() => {
     </section>
     <!-- Product Categories Section -->
     <section class="bg-white py-6 px-6 lg:px-16 overflow-hidden">
-      <HomePageCategories :categories="homepageCategories" linkBase="/products" queryKey="type" />
+      <HomePageCategories linkBase="/products" queryKey="type" />
     </section>
 
     <!-- Discounted products Section -->
@@ -254,7 +253,7 @@ onUnmounted(() => {
     <section class="bg-white px-6 lg:px-16 py-12 pb-24">
       <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div class="group relative rounded-[40px] overflow-hidden h-[400px] shadow-lg">
-          <img :src="cardLeftImage" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+          <img src="/images/type-default.jpg" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
           <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
           <div class="absolute bottom-10 right-10 left-10">
             <span class="text-[#b69a78] font-bold text-sm">#فضای_کاری</span>
@@ -269,7 +268,7 @@ onUnmounted(() => {
         </div>
 
         <div class="group relative rounded-[40px] overflow-hidden h-[400px] shadow-lg">
-          <img :src="cardRightImage" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+          <img src="/images/type-default.jpg" class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
           <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
           <div class="absolute bottom-10 right-10 left-10">
             <span class="text-[#b69a78] font-bold text-sm">#دکوراسیون_منزل</span>

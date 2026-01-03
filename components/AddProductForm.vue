@@ -124,8 +124,8 @@ const handleSubmit = async () => {
 
 <template>
   <div class="!p-3 !overflow-y-hidden">
-    <div class="!p-3 !rounded-xl border-2 border-primarymain border-dashed max-h-[90vh] overflow-y-auto">
-      <h2 v-if="isEditMode" class="text-2xl truncate font-semibold mb-6 text-center">ویرایش مشخصات اصلی</h2>
+    <div class="!p-3 !pt-0 !rounded-xl border-2 border-primarymain border-dashed relative h-[70vh] overflow-y-auto">
+      <h2 v-if="isEditMode" class="text-2xl truncate font-semibold mb-6 sticky top-0 bg-white py-4 z-30 text-center">ویرایش مشخصات اصلی</h2>
       <h2 v-else class="text-2xl font-semibold mb-6 text-center">افزودن محصول جدید</h2>
       <form @submit.prevent="handleSubmit">
         <div class="mb-6">
@@ -176,7 +176,7 @@ const handleSubmit = async () => {
 
         <v-textarea v-model="form.description" density="compact" rows="4" label="توضیحات" variant="outlined" class="mb-4"></v-textarea>
 
-        <div class="flex justify-end space-x-2">
+        <div class="flex justify-end !space-x-2">
           <v-btn type="button" @click="emit('cancel')">انصراف</v-btn>
           <v-btn type="submit" :loading="isSubmitting" color="primary">
             {{ isEditMode ? "ذخیره تغییرات" : "ادامه (افزودن نسخه‌ها)" }}

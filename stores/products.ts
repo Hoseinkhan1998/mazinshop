@@ -243,6 +243,14 @@ export const useProductStore = defineStore("product", {
       }
     },
 
+    async setHomeDiscountPinnedVariant(variantId: number) {
+      const { $supabase } = useNuxtApp();
+      const { error } = await $supabase.rpc("set_home_discount_pinned_variant", {
+        p_variant_id: variantId,
+      });
+      if (error) throw error;
+    },
+
     async addVariant(productId: number, newVariantData: NewVariant) {
       const config = useRuntimeConfig();
       const { $supabase } = useNuxtApp();
@@ -275,6 +283,7 @@ export const useProductStore = defineStore("product", {
           };
           this.products[productIndex] = updatedProduct;
         }
+        return newVariant;
       } catch (error) {
         console.error("Error adding variant:", error);
         throw error;

@@ -355,7 +355,8 @@ onUnmounted(() => {
         </v-menu>
 
         <v-dialog v-model="productDialog" max-width="700px" persistent>
-          <v-card class="!p-0 !rounded-xl">
+          <v-card class="!rounded-xl">
+            <!-- <div @click="closeProductDialog"><v-icon>mdi-close</v-icon></div> -->
             <v-tabs v-model="tab" bg-color="primary" grow>
               <v-tab value="details">۱. مشخصات اصلی</v-tab>
               <v-tab value="variants" :disabled="!productForVariantManagement">۲. نسخه‌ها و قیمت</v-tab>
@@ -374,12 +375,9 @@ onUnmounted(() => {
               </v-window>
             </v-card-text>
 
-            <v-card-actions class="bg-grey-lighten-4">
-              <v-spacer></v-spacer>
-              <v-btn color="blue-darken-1" variant="text" @click="closeProductDialog">
-                {{ productForVariantManagement ? "پایان و بستن" : "انصراف" }}
-              </v-btn>
-            </v-card-actions>
+            <v-btn color="blue-darken-1" variant="text" @click="closeProductDialog">
+              {{ productForVariantManagement ? "پایان و بستن" : "انصراف" }}
+            </v-btn>
           </v-card>
         </v-dialog>
 

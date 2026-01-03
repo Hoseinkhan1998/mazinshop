@@ -4,6 +4,10 @@ export interface ProductVariant {
   price: number;
   stock_quantity: number;
   attributes: Record<string, string>;
+  discount_percent?: number;
+  discounted_price?: number | null;
+  pin_to_home_discount?: boolean;
+  pinned_to_home_discount_at?: string | null;
 }
 
 export interface Product {
