@@ -158,18 +158,91 @@ const getTypeName = (product: Product) => {
 };
 
 // ---------- Price helpers (card) ----------
-const getPriceRange = (product: Product): string => {
+// ---------- Price helpers (card) ----------
+type VariantLike = {
+  id?: number;
+  price?: number | string;
+  discounted_price?: number | string | null;
+  discount_percent?: number | string | null;
+  stock_quantity?: number | null;
+  created_at?: string | null;
+};
+
+// فقط واریانت‌های دارای تخفیف واقعی
+const getDiscountedVariants = (product: Product): VariantLike[] => {
   const variants = (product as any)?.product_variants;
+  if (!Array.isArray(variants) || variants.length === 0) return [];
 
-  if (!Array.isArray(variants) || variants.length === 0) return "ناموجود";
+  return variants.filter((v: any) => {
+    const price = Number(v?.price);
+    const dp = v?.discounted_price != null ? Number(v.discounted_price) : NaN;
+    const percent = v?.discount_percent != null ? Number(v.discount_percent) : 0;
 
-  const prices = variants.map((v: any) => Number(v?.price)).filter((p: number) => Number.isFinite(p));
+    // تخفیف معتبر: درصد > 0 و قیمت جدید < قیمت قدیم
+    return Number.isFinite(price) && Number.isFinite(dp) && dp > 0 && dp < price && Number.isFinite(percent) && percent > 0;
+  });
+};
 
-  if (prices.length === 0) return "ناموجود";
+// انتخاب "بهترین" واریانت تخفیف‌دار برای نمایش کارت:
+// 1) بیشترین درصد تخفیف
+// 2) بیشترین اختلاف قیمت (price - discounted_price)
+// 3) اگر برابر بود: جدیدتر (created_at) سپس موجودی بیشتر
+const pickBestDiscountVariant = (product: Product): VariantLike | null => {
+  const dvs = getDiscountedVariants(product);
+  if (!dvs.length) return null;
 
-  const minPrice = Math.min(...prices);
-  // طبق همون منطق قبلی: فقط کمترین قیمت را نشان بده
-  return `${formatNumber(minPrice)} تومان`;
+  const sorted = [...dvs].sort((a: any, b: any) => {
+    const pa = Number(a.discount_percent || 0);
+    const pb = Number(b.discount_percent || 0);
+    if (pb !== pa) return pb - pa;
+
+    const da = Number(a.price) - Number(a.discounted_price);
+    const db = Number(b.price) - Number(b.discounted_price);
+    if (db !== da) return db - da;
+
+    const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+    if (tb !== ta) return tb - ta;
+
+    const sa = Number(a.stock_quantity ?? 0);
+    const sb = Number(b.stock_quantity ?? 0);
+    return sb - sa;
+  });
+
+  return sorted[0] || null;
+};
+
+const getMinBasePrice = (product: Product): number | null => {
+  const variants = (product as any)?.product_variants;
+  if (!Array.isArray(variants) || variants.length === 0) return null;
+
+  const prices = variants.map((v: any) => Number(v?.price)).filter((p: number) => Number.isFinite(p) && p > 0);
+  if (!prices.length) return null;
+
+  return Math.min(...prices);
+};
+
+const getCardPricing = (product: Product) => {
+  const bestDiscount = pickBestDiscountVariant(product);
+
+  if (bestDiscount) {
+    const oldPrice = Number(bestDiscount.price);
+    const newPrice = Number(bestDiscount.discounted_price);
+    const percent = Math.max(0, Math.min(100, Math.round(Number(bestDiscount.discount_percent || 0))));
+    return {
+      isDiscounted: true,
+      oldPrice,
+      newPrice,
+      percent,
+      showFire: percent >= 40,
+    };
+  }
+
+  const minPrice = getMinBasePrice(product);
+  return {
+    isDiscounted: false,
+    minPrice: minPrice ?? null,
+  };
 };
 
 // ---------- Filters (attributes) ----------
@@ -672,10 +745,11 @@ onUnmounted(() => {
           <h1 class="text-3xl font-bold mb-2 col-span-full">
             {{ hasSearch ? "نتایج جستجو" : "لیست محصولات" }}
             <span v-if="currentType"> ({{ currentType.typename }})</span>
+            <span v-else-if="hasSearch"> ({{ searchQuery }})</span>
           </h1>
-          
+
           <template v-if="shownProducts.length > 0">
-            <NuxtLink            
+            <NuxtLink
               v-for="product in shownProducts"
               :key="product.id"
               :to="`/products/${product.id}`"
@@ -694,10 +768,21 @@ onUnmounted(() => {
                   :src="product.image_urls[1]"
                   :alt="product.title"
                   class="absolute inset-0 w-full h-full object-cover transition-all duration-500 ease-in-out opacity-0 group-hover:!opacity-100 group-hover:scale-110" />
+
+                <!-- Discount badges -->
+                <div v-if="getCardPricing(product).isDiscounted" class="absolute top-3 right-3 flex items-center gap-2 z-20">
+                  <span class="px-3 py-1 rounded-full text-[11px] font-black bg-[#b69a78] text-white shadow-lg">
+                    ٪{{ formatNumber(getCardPricing(product).percent as number) }} تخفیف
+                  </span>
+
+                  <div v-if="getCardPricing(product).showFire" class="w-9 h-9 rounded-2xl bg-white/90 backdrop-blur flex items-center justify-center border border-white/60 shadow">
+                    <v-icon class="text-red-600">mdi-fire</v-icon>
+                  </div>
+                </div>
               </figure>
 
               <div class="!p-3">
-                <h2 class="text-gray-800 line-clamp-2 h-12">
+                <h2 class="text-gray-800 font-semibold line-clamp-2 h-12">
                   {{ product.title }}
                 </h2>
 
@@ -705,9 +790,19 @@ onUnmounted(() => {
                   <span class="text-gray-500 text-xs"> دسته بندی: {{ getTypeName(product) }} </span>
                 </div>
                 <div class="card-actions justify-end items-center">
-                  <span class="text-primary text-xl font-bold">
-                    {{ getPriceRange(product) }}
-                  </span>
+                  <template v-if="getCardPricing(product).isDiscounted">
+                    <div class="flex flex-col items-end">
+                      <span class="text-xs text-neutral-400 font-bold line-through"> {{ formatNumber(getCardPricing(product).oldPrice as number) }} تومان </span>
+                      <span class="text-primary text-xl font-bold"> {{ formatNumber(getCardPricing(product).newPrice as number) }} تومان </span>
+                    </div>
+                  </template>
+
+                  <template v-else>
+                    <span class="text-primary text-xl font-bold">
+                      <template v-if="getCardPricing(product).minPrice != null"> {{ formatNumber(getCardPricing(product).minPrice as number) }} تومان </template>
+                      <template v-else>ناموجود</template>
+                    </span>
+                  </template>
                 </div>
               </div>
               <div

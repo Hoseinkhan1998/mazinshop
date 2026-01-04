@@ -153,10 +153,7 @@ onUnmounted(() => {
     <section class="relative w-full h-[650px] overflow-hidden">
       <div v-for="(slide, index) in heroSlides" :key="slide.id">
         <transition name="fade-hero">
-          <div
-            v-if="currentImageIndex === index"
-            class="absolute inset-0 bg-cover bg-center bg-no-repeat"
-            :style="{ backgroundImage: `url(${slide.image})` }">
+          <div v-if="currentImageIndex === index" class="absolute inset-0 bg-cover bg-center bg-no-repeat" :style="{ backgroundImage: `url(${slide.image})` }">
             <div class="absolute inset-0 bg-gradient-to-l from-black/90 via-black/40 to-transparent"></div>
           </div>
         </transition>
@@ -245,9 +242,7 @@ onUnmounted(() => {
     </section>
 
     <!-- Discounted products Section -->
-    <section class="bg-white px-6 lg:px-16 py-6">
-      <HomePageDiscounted />
-    </section>
+    <HomePageDiscounted />
 
     <!-- Promotional Cards Section -->
     <section class="bg-white px-6 lg:px-16 py-12 pb-24">

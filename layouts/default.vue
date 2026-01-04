@@ -207,7 +207,7 @@ onUnmounted(() => {
                 :to="`/products?type=${type.id}`"
                 class="hover-underline-animation right cursor-pointer"
                 :class="{
-                  'border-b-2 border-stone-600': $route.path.startsWith('/products') && Number($route.query.type) === type.id,
+                  'border-b-2 border-stone-600': $route.path.startsWith('/products') && $route.query.search === undefined && Number($route.query.type) === type.id,
                 }">
                 {{ type.typename }}
               </NuxtLink>

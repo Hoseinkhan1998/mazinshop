@@ -14,9 +14,14 @@ type DbProduct = {
   product_variants: Array<{
     id: number;
     product_id?: number;
-    price: number | string; // numeric ممکنه string بیاد
+    price: number | string;
     stock_quantity?: number;
     attributes?: any;
+    discount_percent?: number | string | null;
+    discounted_price?: number | string | null;
+    pin_to_home_discount?: boolean;
+    pinned_to_home_discount_at?: string | null;
+    created_at?: string | null;
   }>;
 };
 
@@ -235,12 +240,18 @@ export default defineEventHandler(async (event) => {
         type_id,
         image_urls,
         created_at,
-        product_variants (
-          id,
-          price,
-          stock_quantity,
-          attributes
-        )
+      product_variants (
+        id,
+        price,
+        stock_quantity,
+        attributes,
+        discount_percent,
+        discounted_price,
+        pin_to_home_discount,
+        pinned_to_home_discount_at,
+        created_at
+      )
+
       `
       )
       .order("created_at", { ascending: false })

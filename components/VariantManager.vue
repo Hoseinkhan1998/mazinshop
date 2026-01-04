@@ -310,6 +310,52 @@ const handleDelete = async (variant: ProductVariant) => {
   }
 };
 
+const validateAndDuplicate = async () => {
+  const { valid } = (await formRef.value?.validate()) || { valid: false };
+  if (!valid) return;
+  if (!product.value) return;
+
+  // جلوگیری از duplicate variant فقط بر اساس attributes (مثل قبل)
+  const sortedAttributes = Object.fromEntries(Object.entries(variantForm.value.attributes).sort());
+  const newVariantAttrsString = JSON.stringify(sortedAttributes);
+
+  const existingVariants = product.value.product_variants || [];
+  const isDuplicate = existingVariants.some((variant) => {
+    const existingSortedAttributes = Object.fromEntries(Object.entries(variant.attributes).sort());
+    return JSON.stringify(existingSortedAttributes) === newVariantAttrsString;
+  });
+
+  if (isDuplicate) {
+    showToast("نسخه‌ای با این ویژگی‌های دقیق از قبل برای این محصول وجود دارد.", "error");
+    return false;
+  }
+  return true;
+};
+const handleDuplicate = async () => {
+  const { valid } = (await formRef.value?.validate()) || { valid: false };
+  if (!valid) return;
+  if (!product.value) return;
+
+  isSubmitting.value = true;
+  try {
+    const isValidToDuplicate = await validateAndDuplicate();
+    if (!isValidToDuplicate) return;
+
+    const dataToSend = {
+      ...variantForm.value,
+      discount_percent: variantForm.value.discount_percent || 0,
+      discounted_price: variantForm.value.discounted_price != null ? Number(variantForm.value.discounted_price) : null,
+    };
+    await productStore.addVariant(product.value.id, dataToSend);
+    cancelEdit();
+    showToast("نسخه جدید با موفقیت اضافه شد.", "success");
+  } catch (error) {
+    showToast("عملیات با خطا مواجه شد.", "error");
+  } finally {
+    isSubmitting.value = false;
+  }
+};
+
 const handleSubmit = async () => {
   const { valid } = (await formRef.value?.validate()) || { valid: false };
   if (!valid) return;
@@ -512,11 +558,16 @@ const handleSubmit = async () => {
           :rules="[(v) => v >= 0 || 'موجودی نمی‌تواند منفی باشد']">
         </v-text-field>
 
-        <div class="flex justify-end gap-2">
-          <v-btn v-if="isEditMode" @click="cancelEdit">انصراف</v-btn>
-          <v-btn type="submit" color="primary" :loading="isSubmitting">
-            {{ isEditMode ? "ذخیره تغییرات" : "افزودن نسخه" }}
-          </v-btn>
+        <div class="flex justify-between">
+          <div class="flex gap-2">
+            <v-btn v-if="isEditMode" @click="handleDuplicate" color="success" :loading="isSubmitting">ذخیره به عنوان نسخه جدید</v-btn>
+          </div>
+          <div class="flex items-center gap-3">
+            <v-btn v-if="isEditMode" @click="cancelEdit">انصراف</v-btn>
+            <v-btn type="submit" color="primary" :loading="isSubmitting">
+              {{ isEditMode ? "ذخیره تغییرات" : "افزودن نسخه" }}
+            </v-btn>
+          </div>
         </div>
       </v-form>
     </div>

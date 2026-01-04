@@ -121,11 +121,26 @@ async function fetchDetails() {
     if (!productStore.currentProductDetails?.product) {
       errorMessage.value = "محصول مورد نظر یافت نشد.";
     } else {
-      // پیش‌انتخاب اولین وریِنت (در صورت وجود)
-      const firstVariant = productStore.currentProductDetails.product.variants?.[0];
-      if (firstVariant) {
-        selectedOptions.value = { ...firstVariant.attributes };
+      // ---------- انتخاب هوشمند واریانت پیش‌فرض ----------
+      const details = productStore.currentProductDetails;
+      const variants = (details?.product?.variants ?? []) as ProductVariant[];
+      const attrs = (details?.type_attributes ?? []) as Attribute[];
+
+      if (variants.length > 0) {
+        const best = pickDefaultVariant(attrs, variants);
+        if (best) {
+          // فقط گزینه‌های "متغیر" را داخل selectedOptions می‌ریزیم تا چک تعداد کل attributeها خراب نشود
+          const { variableNames } = deriveFixedAndVariableNames(attrs, variants);
+
+          const nextSelected: Record<string, string> = {};
+          for (const [k, v] of Object.entries(best.attributes || {})) {
+            if (variableNames.has(k)) nextSelected[k] = String(v);
+          }
+          selectedOptions.value = nextSelected;
+        }
       }
+      // ----------------------------------------------------
+
       await commentsStore.fetchCommentsForProduct(productId.value);
     }
   } catch (err) {
@@ -225,12 +240,143 @@ const existingCartItemForSelectedVariant = computed<CartItem | null>(() => {
 });
 
 // قیمت فعلی (null اگر هنوز وریِنت کامل نشده)
-const currentPrice = computed<number | null>(() => selectedVariant.value?.price ?? null);
+const currentPrice = computed<number | null>(() => {
+  if (!selectedVariant.value) return null;
+  return getEffectivePrice(selectedVariant.value);
+});
+
+const hasDiscountOnSelected = computed(() => (selectedVariant.value ? isValidDiscount(selectedVariant.value) : false));
+
+const selectedOldPrice = computed<number | null>(() => {
+  if (!selectedVariant.value) return null;
+  const p = Number((selectedVariant.value as any).price);
+  return Number.isFinite(p) ? p : null;
+});
+
+const selectedDiscountedPrice = computed<number | null>(() => {
+  if (!selectedVariant.value) return null;
+  if (!isValidDiscount(selectedVariant.value)) return null;
+  const dp = Number((selectedVariant.value as any).discounted_price);
+  return Number.isFinite(dp) ? dp : null;
+});
+
+const selectedDiscountPercent = computed<number>(() => {
+  if (!selectedVariant.value) return 0;
+  if (!isValidDiscount(selectedVariant.value)) return 0;
+  return getDiscountPercent(selectedVariant.value);
+});
+
+const showDiscountFire = computed(() => selectedDiscountPercent.value >= 40);
 
 const isInvalidCombination = computed(() => allVariableSelected.value && !selectedVariant.value && (allVariants.value?.length || 0) > 0);
 
 // ---------- Helpers ----------
 const formatNumber = (num: number | undefined | null) => (num != null ? num.toLocaleString("fa-IR") : "-");
+
+// ---------------- Discount helpers ----------------
+const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
+
+const isValidDiscount = (v: any) => {
+  const price = Number(v?.price);
+  const dp = v?.discounted_price == null ? null : Number(v.discounted_price);
+  const percent = v?.discount_percent == null ? null : Number(v.discount_percent);
+
+  if (!Number.isFinite(price) || price <= 0) return false;
+  if (dp == null || !Number.isFinite(dp) || dp <= 0) return false;
+  if (dp >= price) return false;
+
+  // percent optional but if exists should be sane
+  if (percent != null) {
+    if (!Number.isFinite(percent)) return false;
+    if (percent <= 0 || percent > 100) return false;
+  }
+  return true;
+};
+
+const getDiscountPercent = (v: any) => {
+  const price = Number(v?.price);
+  const dp = v?.discounted_price == null ? null : Number(v.discounted_price);
+  if (!Number.isFinite(price) || price <= 0 || dp == null || !Number.isFinite(dp)) return 0;
+  const raw = Math.round(((price - dp) / price) * 100);
+  return clamp(raw, 0, 100);
+};
+
+const getDiscountAmount = (v: any) => {
+  const price = Number(v?.price);
+  const dp = v?.discounted_price == null ? null : Number(v.discounted_price);
+  if (!Number.isFinite(price) || price <= 0 || dp == null || !Number.isFinite(dp)) return 0;
+  return Math.max(0, price - dp);
+};
+
+const getEffectivePrice = (v: any) => {
+  const price = Number(v?.price);
+  const dp = v?.discounted_price == null ? null : Number(v.discounted_price);
+  if (isValidDiscount(v) && dp != null && Number.isFinite(dp)) return dp;
+  return Number.isFinite(price) ? price : 0;
+};
+
+// derive fixed/variable attribute names (same logic as categorizedAttributes but inline for initial pick)
+function deriveFixedAndVariableNames(attrs: Attribute[], variants: ProductVariant[]) {
+  const map: Record<string, Set<string>> = {};
+  for (const a of attrs) map[a.name] = new Set<string>();
+
+  for (const v of variants) {
+    for (const [k, val] of Object.entries(v.attributes || {})) {
+      if (map[k]) map[k].add(String(val));
+    }
+  }
+
+  const fixedNames = new Set<string>();
+  const variableNames = new Set<string>();
+  for (const a of attrs) {
+    const s = map[a.name];
+    if (!s || s.size === 0) continue;
+    if (s.size === 1) fixedNames.add(a.name);
+    else variableNames.add(a.name);
+  }
+  return { fixedNames, variableNames };
+}
+
+// pick default variant (prefer best valid discount; else cheapest in-stock)
+function pickDefaultVariant(attrs: Attribute[], variants: ProductVariant[]) {
+  const inStock = variants.filter((v: any) => Number(v?.stock_quantity ?? 0) > 0);
+  const list = inStock.length ? inStock : variants;
+
+  // 1) best discounted
+  const discounted = list.filter((v: any) => isValidDiscount(v));
+  if (discounted.length) {
+    return discounted.sort((a: any, b: any) => {
+      const pa = getDiscountPercent(a);
+      const pb = getDiscountPercent(b);
+      if (pb !== pa) return pb - pa;
+
+      const da = getDiscountAmount(a);
+      const db = getDiscountAmount(b);
+      if (db !== da) return db - da;
+
+      const sa = Number(a?.stock_quantity ?? 0);
+      const sb = Number(b?.stock_quantity ?? 0);
+      if (sb !== sa) return sb - sa;
+
+      // tie-break: newer
+      return Number(b?.id ?? 0) - Number(a?.id ?? 0);
+    })[0];
+  }
+
+  // 2) otherwise cheapest effective price
+  return list.slice().sort((a: any, b: any) => {
+    const ea = getEffectivePrice(a);
+    const eb = getEffectivePrice(b);
+    if (ea !== eb) return ea - eb;
+
+    const sa = Number(a?.stock_quantity ?? 0);
+    const sb = Number(b?.stock_quantity ?? 0);
+    if (sb !== sa) return sb - sa;
+
+    return Number(b?.id ?? 0) - Number(a?.id ?? 0);
+  })[0];
+}
+// --------------------------------------------------
 
 const allVariableSelected = computed(() => categorizedAttributes.value.variable.every((attr) => !!selectedOptions.value[attr.name]));
 
@@ -412,7 +558,7 @@ const deleteComment = async (comment: CommentWithMeta) => {
             <div class="relative group overflow-hidden rounded-2xl shadow-lg border border-gray-100 bg-white">
               <v-carousel v-model="selectedImageIndex" hide-delimiters :show-arrows="thumbnailImages.length > 1 ? 'hover' : false" height="400" color="primary">
                 <v-carousel-item v-for="(imgUrl, index) in thumbnailImages" :key="index" :src="imgUrl" cover class="cursor-zoom-in" @click="galleryOpen = true"></v-carousel-item>
-              </v-carousel>              
+              </v-carousel>
             </div>
 
             <div v-if="thumbnailImages.length > 1" class="mt-6 flex flex-wrap gap-3 justify-center">
@@ -499,9 +645,23 @@ const deleteComment = async (comment: CommentWithMeta) => {
               <!-- <span class="text-gray-400 text-xs font-medium">قیمت نهایی</span> -->
               <div class="flex w-full justify-end items-baseline gap-1">
                 <template v-if="currentPrice !== null">
-                  <span class="text-2xl font-black text-gray-900 tracking-tighter">{{ formatNumber(currentPrice) }}</span>
-                  <span class="text-[10px] font-bold text-gray-500">تومان</span>
+                  <div class="flex flex-col items-end gap-1 w-full">
+                    <!-- Badges -->
+                    <div v-if="hasDiscountOnSelected" class="flex items-center gap-2">
+                      <span class="px-2 py-1 rounded-full text-[10px] font-black bg-red-600 text-white"> ٪{{ formatNumber(selectedDiscountPercent) }} تخفیف </span>
+                      <span v-if="showDiscountFire" class="px-2 py-1 rounded-full text-[10px] font-black bg-black text-white"> 🔥 ویژه </span>
+                    </div>
+
+                    <!-- Prices -->
+                    <div class="flex items-baseline gap-2 justify-end w-full">
+                      <span class="text-2xl font-black text-gray-900 tracking-tighter">{{ formatNumber(currentPrice) }}</span>
+                      <span class="text-[10px] font-bold text-gray-500">تومان</span>
+                    </div>
+
+                    <div v-if="hasDiscountOnSelected && selectedOldPrice" class="text-[11px] font-bold text-gray-400 line-through">{{ formatNumber(selectedOldPrice) }} تومان</div>
+                  </div>
                 </template>
+
                 <span v-else-if="isInvalidCombination" class="text-red-500 text-lg font-bold">ناموجود</span>
                 <span v-else class="text-gray-200 text-xl tracking-widest">---</span>
               </div>
@@ -757,9 +917,23 @@ const deleteComment = async (comment: CommentWithMeta) => {
               <!-- <span class="text-gray-400 text-xs font-medium">قیمت نهایی</span> -->
               <div class="flex w-full justify-end items-baseline gap-1">
                 <template v-if="currentPrice !== null">
-                  <span class="text-2xl font-black text-gray-900 tracking-tighter">{{ formatNumber(currentPrice) }}</span>
-                  <span class="text-[10px] font-bold text-gray-500">تومان</span>
+                  <div class="flex flex-col items-end gap-1 w-full">
+                    <!-- Badges -->
+                    <div v-if="hasDiscountOnSelected" class="flex items-center gap-2">
+                      <span class="px-2 py-1 rounded-full text-[10px] font-black bg-red-600 text-white"> ٪{{ formatNumber(selectedDiscountPercent) }} تخفیف </span>
+                      <span v-if="showDiscountFire" class="px-2 py-1 rounded-full text-[10px] font-black bg-black text-white"> 🔥 ویژه </span>
+                    </div>
+
+                    <!-- Prices -->
+                    <div class="flex items-baseline gap-2 justify-end w-full">
+                      <span class="text-2xl font-black text-gray-900 tracking-tighter">{{ formatNumber(currentPrice) }}</span>
+                      <span class="text-[10px] font-bold text-gray-500">تومان</span>
+                    </div>
+
+                    <div v-if="hasDiscountOnSelected && selectedOldPrice" class="text-[11px] font-bold text-gray-400 line-through">{{ formatNumber(selectedOldPrice) }} تومان</div>
+                  </div>
                 </template>
+
                 <span v-else-if="isInvalidCombination" class="text-red-500 text-lg font-bold">ناموجود</span>
                 <span v-else class="text-gray-200 text-xl tracking-widest">---</span>
               </div>
