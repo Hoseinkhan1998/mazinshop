@@ -19,69 +19,7 @@ type Product = {
   price: number;
 };
 
-// ---- Demo hardcoded data
-const products = ref<Product[]>([
-  {
-    id: 201,
-    title: "صندلی مدرن مدل Nova",
-    image: "https://images.unsplash.com/photo-1582582621959-48d27397dc19?auto=format&fit=crop&w=1200&q=80",
-    price: 6490000,
-  },
-  {
-    id: 202,
-    title: "میز عسلی چوبی",
-    image: "https://images.unsplash.com/photo-1549497538-303791108f95?auto=format&fit=crop&w=1200&q=80",
-    price: 3290000,
-  },
-  {
-    id: 203,
-    title: "آباژور مینیمال",
-    image: "https://images.unsplash.com/photo-1519710164239-da123dc03ef4?auto=format&fit=crop&w=1200&q=80",
-    price: 2190000,
-  },
-  {
-    id: 204,
-    title: "کاناپه دو نفره",
-    image: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1200&q=80",
-    price: 19900000,
-  },
-  {
-    id: 205,
-    title: "آینه دکوراتیو",
-    image: "https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=1200&q=80",
-    price: 2790000,
-  },
-  {
-    id: 206,
-    title: "گلدان سرامیکی",
-    image: "https://images.unsplash.com/photo-1519710164239-da123dc03ef4?auto=format&fit=crop&w=1200&q=80",
-    price: 890000,
-  },
-  {
-    id: 207,
-    title: "چراغ دیواری مدرن",
-    image: "https://images.unsplash.com/photo-1549497538-303791108f95?auto=format&fit=crop&w=1200&q=80",
-    price: 1590000,
-  },
-  {
-    id: 208,
-    title: "میز ناهارخوری",
-    image: "https://images.unsplash.com/photo-1524758631624-e2822e304c36?auto=format&fit=crop&w=1200&q=80",
-    price: 12490000,
-  },
-  {
-    id: 209,
-    title: "فرش مدرن طرح هندسی",
-    image: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=1200&q=80",
-    price: 8990000,
-  },
-  {
-    id: 210,
-    title: "قفسه دیواری",
-    image: "https://images.unsplash.com/photo-1582582621959-48d27397dc19?auto=format&fit=crop&w=1200&q=80",
-    price: 2390000,
-  },
-]);
+const products = ref<Product[]>([]);
 
 const router = useRouter();
 const modules = [Grid, Pagination, Navigation];
@@ -92,7 +30,7 @@ const navNextEl = ref<HTMLElement | null>(null);
 
 // format price (تومان)
 const formatToman = (price: number) => {
-  const str = price.toLocaleString("en-US");
+  const str = Math.max(0, Math.floor(price || 0)).toLocaleString("en-US");
   return str
     .replaceAll("0", "۰")
     .replaceAll("1", "۱")
@@ -107,7 +45,7 @@ const formatToman = (price: number) => {
     .replaceAll(",", "٬");
 };
 
-// کلیک (در grid swiper معمولاً conflict کمتره، ولی باز هم امن‌تر)
+// کلیک
 const bestSwiper = ref<any>(null);
 const setBestSwiper = (s: any) => (bestSwiper.value = s);
 
@@ -160,6 +98,22 @@ const swiperOptions = {
 };
 
 onMounted(async () => {
+  // 1) دیتای واقعی
+  try {
+    const res = await $fetch<{ products: any[] }>("/api/products/most-viewed?limit=10");
+    products.value =
+      (res.products || []).map((x) => ({
+        id: x.id,
+        title: x.title,
+        image: x.image || "",
+        price: Number(x.price || 0),
+      })) || [];
+  } catch (e) {
+    console.error("most-viewed fetch error:", e);
+    products.value = [];
+  }
+
+  // 2) init nav
   await nextTick();
   if (bestSwiper.value?.navigation) {
     try {
@@ -171,7 +125,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="max-w-7xl mx-auto" dir="rtl">
+  <div v-if="products.length" class="max-w-7xl mx-auto" dir="rtl">
     <!-- متفاوت: یک پنل/گالری -->
     <div class="relative rounded-[28px] overflow-hidden border border-neutral-100 bg-white">
       <!-- Top strip -->
@@ -179,20 +133,12 @@ onMounted(async () => {
         <div class="flex items-center justify-between gap-4">
           <div>
             <div class="flex items-center gap-2 mb-2">
-              <span class="px-3 py-1 rounded-full text-[11px] font-black bg-white/10 text-white border border-white/15"> ⭐ پرفروش‌ترین‌ها </span>
+              <span class="px-3 py-1 rounded-full text-[11px] font-black bg-white/10 text-white border border-white/15"> ⭐ پربازدیدترین‌ها </span>
               <span class="px-3 py-1 rounded-full text-[11px] font-black bg-[#b69a78] text-white"> انتخاب مشتریان </span>
             </div>
-            <h2 class="text-xl sm:text-2xl font-black text-white">محبوب‌ترین محصولات این هفته</h2>
+            <h2 class="text-xl sm:text-2xl font-black text-white">محبوب‌ترین محصولات مزین شاپ</h2>
             <!-- <p class="text-xs sm:text-sm text-white/70 mt-2 font-medium">یک نگاه سریع به آیتم‌هایی که بیشترین سفارش را داشته‌اند.</p> -->
           </div>
-
-          <button
-            type="button"
-            class="hidden sm:flex items-center gap-2 h-11 px-5 rounded-full bg-white text-neutral-900 font-bold text-sm hover:bg-[#b69a78] hover:text-white transition-all"
-            @click="router.push('/products?sort=bestselling')">
-            مشاهده همه
-            <v-icon size="18">mdi-arrow-left</v-icon>
-          </button>
         </div>
       </div>
 

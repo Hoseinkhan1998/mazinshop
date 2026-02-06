@@ -44,6 +44,29 @@ const selectedOptions = ref<Record<string, string>>({});
 // وضعیت CTA: بعد از افزودن کالا، دکمه به «مشاهده سبد خرید» تغییر می‌کند
 const addedToCart = ref(false);
 
+async function pingProductView(pId: number) {
+  if (import.meta.server) return;
+
+  try {
+    const { $supabase } = useNuxtApp();
+    const {
+      data: { session },
+    } = await $supabase.auth.getSession();
+
+    const token = session?.access_token;
+
+    // fire-and-forget (ولی await گذاشتم که اگر خواستی بعداً لاگ بگیری راحت باشه)
+    await $fetch("/api/products/view", {
+      method: "POST",
+      body: { productId: pId },
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+  } catch (e) {
+    // عمداً silent: نباید UI رو خراب کنه
+    console.warn("view ping failed:", e);
+  }
+}
+
 // ---------- Fetch ----------
 onMounted(() => fetchDetails());
 watch(productId, () => fetchDetails());
@@ -121,6 +144,7 @@ async function fetchDetails() {
     if (!productStore.currentProductDetails?.product) {
       errorMessage.value = "محصول مورد نظر یافت نشد.";
     } else {
+      pingProductView(productId.value);
       // ---------- انتخاب هوشمند واریانت پیش‌فرض ----------
       const details = productStore.currentProductDetails;
       const variants = (details?.product?.variants ?? []) as ProductVariant[];
