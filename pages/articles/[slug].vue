@@ -58,10 +58,51 @@ if (article.value) {
     twitterCard: "summary_large_image",
   });
 }
+
+// ایجاد ساختار JSON-LD برای گوگل
+const jsonLd = computed(() => {
+  if (!article.value) return null;
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: article.value.title,
+    description: article.value.excerpt,
+    image: [article.value.image_url],
+    datePublished: article.value.created_at,
+    author: [
+      {
+        "@type": "Organization", // یا Person اگر نویسنده مشخصی داری
+        name: "مازین شاپ",
+        url: "https://mazzinshop.ir",
+      },
+    ],
+    publisher: {
+      "@type": "Organization",
+      name: "مازین شاپ",
+      logo: {
+        "@type": "ImageObject",
+        url: "https://mazzinshop.ir/logo.png", // آدرس لوگوی سایتت را اینجا بگذار
+      },
+    },
+    mainEntityOfPage: {
+      "@type": "WebPage",
+      "@id": `https://mazzinshop.ir/articles/${article.value.slug}`,
+    },
+  };
+});
+
+useHead({
+  script: [
+    {
+      type: "application/ld+json",
+      children: JSON.stringify(jsonLd.value),
+    },
+  ],
+});
 </script>
 
 <style>
-/* استایل‌های پایه برای تمیزتر شدن متن‌های طولانی */
 .prose p {
   margin-bottom: 1.5em;
   text-align: justify;

@@ -159,6 +159,14 @@ onUnmounted(() => {
                       <p>مدیریت کامنت‌ها</p>
                       <v-icon class="!text-xl text-yellow-500 transform -rotate-30">mdi-crown</v-icon>
                     </NuxtLink>
+                    <NuxtLink
+                      v-if="isAdmin && $route.path !== '/admin/articles/create'"
+                      to="/admin/articles/create"
+                      class="cursor-pointer hover:!bg-neutral-200 px-4 py-1 transition-all duration-150 flex items-center gap-1 rounded-lg">
+                      <p>افزودن مقاله</p>
+                      <v-icon class="!text-xl text-yellow-500 transform -rotate-30">mdi-crown</v-icon>
+                    </NuxtLink>
+                    <NuxtLink to="/articles" class="cursor-pointer hover:!bg-neutral-200 px-4 py-1 transition-all duration-150 rounded-lg">مقاله ها</NuxtLink>
 
                     <NuxtLink to="/information" class="cursor-pointer hover:!bg-neutral-200 px-4 py-1 transition-all duration-150 rounded-lg">ویرایش پروفایل</NuxtLink>
                     <li>

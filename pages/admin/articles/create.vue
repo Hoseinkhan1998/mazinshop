@@ -1,8 +1,8 @@
 <template>
-  <div class="container mx-auto px-4 py-8 max-w-3xl">
+  <div class=" px-4 max-w-3xl">
     <h1 class="text-3xl font-bold mb-8 text-gray-800">✍️ افزودن مقاله جدید</h1>
 
-    <form @submit.prevent="submitArticle" class="space-y-6 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+    <form @submit.prevent="submitArticle" class="space-y-6 bg-white !p-6 rounded-xl shadow-sm border border-gray-100">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-2">عنوان مقاله</label>
